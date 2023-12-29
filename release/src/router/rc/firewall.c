@@ -721,7 +721,7 @@ static void mangle_table(void)
 #ifdef TCONFIG_BCMARM
 	int i, n;
 
-	if (gateway_mode) {
+	if ((gateway_mode) || (nvram_match("wk_mode_x", "1"))) {
 		for (i = 0; i < wanfaces.count; ++i) {
 			if ((*(wanfaces.iface[i].name)) && (wanup)) {
 				/* Drop incoming packets which destination IP address is to our LAN side directly */
@@ -791,7 +791,7 @@ static void nat_table(void)
 	/* 2 for nat */
 	ipt_bwlimit(2);
 
-	if (gateway_mode) {
+	if ((gateway_mode) || (nvram_match("wk_mode_x", "1"))) {
 		for (i = 0; i < wanfaces.count; ++i) {
 			if (*(wanfaces.iface[i].name)) {
 				/* chain_wan_prerouting */
