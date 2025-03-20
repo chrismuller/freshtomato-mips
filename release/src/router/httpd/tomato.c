@@ -827,6 +827,8 @@ static const nvset_t nvset_list[] = {
 	{ "dhcpc_121",			V_01				},	/* DHCP Classless Static Route (option 121) */
 	{ "force_igmpv2",		V_01				},
 	{ "lan_stp",			V_RANGE(0, 1)			},
+	{ "wk_mode",			V_LENGTH(1, 32)			},	// gateway, router
+	{ "wk_mode_x",			V_LENGTH(1, 1)			},
 #ifdef TCONFIG_ZEBRA
 	{ "dr_setting",			V_RANGE(0, 3)			},
 	{ "dr_lan_tx",			V_LENGTH(0, 32)			},

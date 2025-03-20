@@ -39,7 +39,7 @@ function init() {
 <!-- / / / -->
 
 <div class="about">
-	<b>FreshTomato Firmware <% version(1); %></b><br>
+	<b>FreshTomato Custom Firmware <% version(1); %></b><br>
 	<br>
 	Linux kernel <% version(2); %> and Broadcom Wireless Driver <% version(3); %><br>
 	<br>
@@ -47,7 +47,8 @@ function init() {
 	<br>
 	<b>FreshTomato project page: </b><a href="https://freshtomato.org" class="new_window"> https://freshtomato.org</a><br>
 	<b>Forums about Tomato</b> - EN: <a href="https://www.linksysinfo.org/index.php?forums/tomato-firmware.33/" class="new_window">https://linksysinfo.org</a> PL: <a href="https://openlinksys.info" class="new_window">https://openlinksys.info</a><br>
-	<b>Source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br>
+	<b>Original source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br>
+	<b>Source code: </b><a href="https://bitbucket.org/CM92/freshtomato-mips3" class="new_window"> https://bitbucket.org</a><br>
 	<br>
 	<hr>
 <!-- OPTSIZE-BEGIN -->
@@ -242,10 +243,10 @@ function init() {
 <!-- OPTSIZE-END -->
 	<br><b>FreshTomato-MIPS - is an alternative, customized version, forked off from Tomato by Shibby</b>
 	<br>
-	Copyright (C) 2016-2024 by Pedro
+	Copyright (C) 2016-2024 by Pedro and friends
 	<br>
 	<br>
-	Built on <% build_time(); %> by Pedro
+	Built on <% build_time(); %> by Chris Muller
 	<br>
 	<br>
 	<br>

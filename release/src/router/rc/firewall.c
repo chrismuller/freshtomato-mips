@@ -55,6 +55,7 @@ static int debug_only = 0;
 #endif
 
 int ipv6_enabled;
+static int gateway_mode;
 static int remotemanage;
 
 static int wanup;
@@ -768,6 +769,7 @@ static void mangle_table(void)
 #endif /* TCONFIG_BCMARM */
 
 #ifdef TCONFIG_BCMARM
+	if (gateway_mode) {
 	for (i = 0; i < wanfaces.count; ++i) {
 		if ((*(wanfaces.iface[i].name)) && (wanup)) {
 			/* Drop incoming packets which destination IP address is to our LAN side directly */
@@ -808,6 +810,7 @@ static void mangle_table(void)
 		}
 	}
 #endif
+	}
 #endif /* TCONFIG_BCMARM */
 
 	ipt_routerpolicy();
@@ -836,6 +839,7 @@ static void nat_table(void)
 	/* 2 for nat */
 	ipt_bwlimit(2);
 
+	if (gateway_mode) {
 	for (i = 0; i < wanfaces.count; ++i) {
 		if (*(wanfaces.iface[i].name)) {
 			/* chain_wan_prerouting */
@@ -1110,6 +1114,48 @@ static void nat_table(void)
 					ipt_write("-A POSTROUTING -o %s -s %s/%s -d %s/%s -j SNAT --to-source %s\n", lanface[i], lanaddr[i], lanmask[i], lanaddr[i], lanmask[i], lanaddr[i]);
 			}
 		break;
+	}
+	} else if ((!gateway_mode) && (nvram_match("wk_mode_x", "1"))) {
+			
+	for (i = 0; i < wanfaces.count; ++i) {
+		if (*(wanfaces.iface[i].name)) {
+			/* chain_wan_prerouting */
+			if (wanup)
+				ipt_write("-A PREROUTING -d %s -j %s\n", wanfaces.iface[i].ip, chain_wan_prerouting);
+		}
+	}
+	for (i = 0; i < wan2faces.count; ++i) {
+		if (*(wan2faces.iface[i].name)) {
+			/* chain_wan_prerouting */
+			if (wan2up)
+				ipt_write("-A PREROUTING -d %s -j %s\n", wan2faces.iface[i].ip, chain_wan_prerouting);
+		}
+	}
+#ifdef TCONFIG_MULTIWAN
+	for (i = 0; i < wan3faces.count; ++i) {
+		if (*(wan3faces.iface[i].name)) {
+			/* chain_wan_prerouting */
+			if (wan3up)
+				ipt_write("-A PREROUTING -d %s -j %s\n", wan3faces.iface[i].ip, chain_wan_prerouting);
+		}
+	}
+	for (i = 0; i < wan4faces.count; ++i) {
+		if (*(wan4faces.iface[i].name)) {
+			/* chain_wan_prerouting */
+			if (wan4up)
+				ipt_write("-A PREROUTING -d %s -j %s\n", wan4faces.iface[i].ip, chain_wan_prerouting);
+		}
+	}
+#endif /* TCONFIG_MULTIWAN */
+		
+	if (wanup || wan2up
+#ifdef TCONFIG_MULTIWAN
+	    || wan3up || wan4up
+#endif
+	) {
+		ipt_forward(IPT_TABLE_NAT);
+		ipt_triggered(IPT_TABLE_NAT);
+	}
 	}
 
 	ipt_write("COMMIT\n");
@@ -1798,8 +1844,13 @@ static void filter_table(void)
 	pptp_client_firewall("OUTPUT", "", ipt_write);
 #endif
 
-	ip46t_write(ipv6_enabled, ":FORWARD DROP [0:0]\n");
-	filter_forward();
+	if ((gateway_mode) || (nvram_match("wk_mode_x", "1"))) {
+		ip46t_write(ipv6_enabled, ":FORWARD DROP [0:0]\n");
+		filter_forward();
+	}
+	else
+		ip46t_write(ipv6_enabled, ":FORWARD ACCEPT [0:0]\n");
+
 	ip46t_write(ipv6_enabled, "COMMIT\n");
 }
 
@@ -1942,6 +1993,8 @@ int start_firewall(void)
 	enable_blackhole_detection();
 
 	chains_log_detection();
+	
+	gateway_mode = !nvram_match("wk_mode", "router");
 
 	for (n = 0; n < BRIDGE_COUNT; n++) {
 		memset(buf1, 0, sizeof(buf1));
