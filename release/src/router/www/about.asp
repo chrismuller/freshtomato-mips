@@ -48,7 +48,7 @@ function init() {
 	<b>FreshTomato project page: </b><a href="https://freshtomato.org" class="new_window"> https://freshtomato.org</a><br>
 	<b>Forums about Tomato</b> - EN: <a href="https://www.linksysinfo.org/index.php?forums/tomato-firmware.33/" class="new_window">https://linksysinfo.org</a> PL: <a href="https://openlinksys.info" class="new_window">https://openlinksys.info</a><br>
 	<b>Original source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br>
-	<b>Source code: </b><a href="https://bitbucket.org/CM92/freshtomato-mips3" class="new_window"> https://bitbucket.org</a><br>
+	<b>Source code: </b><a href="https://github.com/chrismuller/freshtomato-mips" class="new_window"> https://github.com</a><br>
 	<br>
 	<hr>
 <!-- OPTSIZE-BEGIN -->
