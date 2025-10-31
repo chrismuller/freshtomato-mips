@@ -241,7 +241,11 @@ function init() {
 
 	<hr>
 <!-- OPTSIZE-END -->
-	<br><b>FreshTomato-MIPS - is an alternative, customized version, forked off from Tomato by Shibby</b>
+
+<b>"Chris Muller" feature:</b><br>
+	- Re-adding switch allowing to choose between router and gateway mode<br>
+	<br>
+<br><b>FreshTomato-MIPS - is an alternative, customized version, forked off from Tomato by Shibby</b>
 	<br>
 	Copyright (C) 2016-2025 by Pedro and friends
 	<br>
