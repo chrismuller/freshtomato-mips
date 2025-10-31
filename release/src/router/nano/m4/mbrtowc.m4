@@ -1,6 +1,6 @@
 # mbrtowc.m4
 # serial 46
-dnl Copyright (C) 2001-2002, 2004-2005, 2008-2024 Free Software Foundation,
+dnl Copyright (C) 2001-2002, 2004-2005, 2008-2025 Free Software Foundation,
 dnl Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
@@ -716,7 +716,7 @@ AC_DEFUN([gl_MBRTOWC_EMPTY_INPUT],
 dnl Test whether mbrtowc reports encoding errors in the C locale.
 dnl Although POSIX was never intended to allow this, the GNU C Library
 dnl and other implementations do it.  See:
-dnl https://sourceware.org/bugzilla/show_bug.cgi?id=19932
+dnl https://sourceware.org/PR19932
 dnl POSIX has now clarified it:
 dnl <https://pubs.opengroup.org/onlinepubs/9699919799/functions/mbrtowc.html>
 dnl says: "In the POSIX locale an [EILSEQ] error cannot occur since all byte

@@ -1,5 +1,5 @@
 /* Use the internal lock used by mbrtowc and mbrtoc32.
-   Copyright (C) 2019-2024 Free Software Foundation, Inc.
+   Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -23,7 +23,7 @@ mbtowc_unlocked (wchar_t *pwc, const char *p, size_t m)
 {
   /* Put the hidden internal state of mbtowc into an initial state.
      This is needed at least with glibc, uClibc, and MSVC CRT.
-     See <https://sourceware.org/bugzilla/show_bug.cgi?id=9674>.  */
+     See <https://sourceware.org/PR9674>.  */
   mbtowc (NULL, NULL, 0);
 
   return mbtowc (pwc, p, m);

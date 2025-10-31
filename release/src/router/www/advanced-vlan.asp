@@ -32,14 +32,14 @@
 <title>[<% ident(); %>] Advanced: VLAN</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="wireless.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
 
 <script>
 
-//	<% nvram ("t_model_name,vlan0ports,vlan1ports,vlan2ports,vlan3ports,vlan4ports,vlan5ports,vlan6ports,vlan7ports,vlan8ports,vlan9ports,vlan10ports,vlan11ports,vlan12ports,vlan13ports,vlan14ports,vlan15ports,vlan0hwname,vlan1hwname,vlan2hwname,vlan3hwname,vlan4hwname,vlan5hwname,vlan6hwname,vlan7hwname,vlan8hwname,vlan9hwname,vlan10hwname,vlan11hwname,vlan12hwname,vlan13hwname,vlan14hwname,vlan15hwname,wan_ifnameX,wan2_ifnameX,wan3_ifnameX,wan4_ifnameX,manual_boot_nv,boardtype,boardflags,lan_ifname,lan_ifnames,lan1_ifname,lan1_ifnames,lan2_ifname,lan2_ifnames,lan3_ifname,lan3_ifnames,vlan0tag,vlan0vid,vlan1vid,vlan2vid,vlan3vid,vlan4vid,vlan5vid,vlan6vid,vlan7vid,vlan8vid,vlan9vid,vlan10vid,vlan11vid,vlan12vid,vlan13vid,vlan14vid,vlan15vid,wl_ssid,wl_radio,wl_net_mode,wl_nband");%>
+//	<% nvram ("t_model_name,vlan0ports,vlan1ports,vlan2ports,vlan3ports,vlan4ports,vlan5ports,vlan6ports,vlan7ports,vlan8ports,vlan9ports,vlan10ports,vlan11ports,vlan12ports,vlan13ports,vlan14ports,vlan15ports,vlan0hwname,vlan1hwname,vlan2hwname,vlan3hwname,vlan4hwname,vlan5hwname,vlan6hwname,vlan7hwname,vlan8hwname,vlan9hwname,vlan10hwname,vlan11hwname,vlan12hwname,vlan13hwname,vlan14hwname,vlan15hwname,wan_ifnameX,manual_boot_nv,boardtype,boardflags,lan_ifname,lan_ifnames,vlan0tag,vlan0vid,vlan1vid,vlan2vid,vlan3vid,vlan4vid,vlan5vid,vlan6vid,vlan7vid,vlan8vid,vlan9vid,vlan10vid,vlan11vid,vlan12vid,vlan13vid,vlan14vid,vlan15vid,wl_ssid,wl_radio,wl_net_mode,wl_nband");%>
 
 var cprefix = 'advanced_vlan';
 var port_vlan_supported = 0;
@@ -112,7 +112,6 @@ switch (nvram['t_model_name']) {
 	case 'Linksys E1000 v1':
 	case 'Linksys E1000 v2.0':
 	case 'Linksys E1000 v2.1':
-	case 'Linksys E3000':
 	case 'Linksys WRT310N v2':
 	case 'Linksys WRT320N':
 	case 'Linksys WRT610N v2':
@@ -157,6 +156,7 @@ switch (nvram['t_model_name']) {
 	case 'Tenda N60':
 	case 'Linksys WRT160N': /* WRT160Nv3 */
 	case 'Linksys E2000':
+	case 'Linksys E3000':
 		COL_P0N = '0';
 		COL_P1N = '4';
 		COL_P2N = '3';
@@ -234,7 +234,7 @@ if (port_vlan_supported) {
 		                '<div id="vport_2"><img src="eth_off.gif" id="eth_off_3" alt=""><\/div>2', '<br>Tag<br>2',
 		                '<div id="vport_3"><img src="eth_off.gif" id="eth_off_4" alt=""><\/div>3', '<br>Tag<br>3',
 		                '<div id="vport_4"><img src="eth_off.gif" id="eth_off_5" alt=""><\/div>4', '<br>Tag<br>4',
-		                '<br>Default<br>VLAN', 'Ethernet to<br>bridge<br>mapping']);
+		                '<br>Default<br>VLAN', 'VLAN to<br>bridge<br>mapping']);
 
 		vlg.populate();
 		vlg.canDelete = false;
@@ -910,7 +910,7 @@ function init() {
 		vlg.resetNewEditor();
 		var c;
 		if (((c = cookie.get(cprefix+'_notes_vis')) != null) && (c == '1'))
-			toggleVisibility(cprefix, "notes");
+			toggleVisibility(cprefix, 'notes');
 	}
 	else
 		E('notice-msg').innerHTML = '<div id="notice">The feature is not supported on this router.<\/div>';
@@ -1022,7 +1022,7 @@ function init() {
 <div id="unknown_router" style="display:none">
 	<div class="section-title">!! Unknown Port Mapping, using default !!</div>
 	<div class="section-centered">
-		<a href="http://www.linksysinfo.org/index.php?threads/can-vlan-gui-port-order-be-corrected.70160/#post-247634/" class="new_window"><b>Please follow this link for instructions to get it corrected.</b></a>
+		<a href="http://www.linksysinfo.org/index.php?threads/can-vlan-gui-port-order-be-corrected.70160/#post-247634" class="new_window"><b>Please follow this link for instructions to get it corrected.</b></a>
 		<br><br>Include router Brand/Model (<% nv('t_model_name'); %>), results from "nvram show | grep vlan1ports" &amp;
 		<br>port numbers on BACK of router case (left -> right viewed from front).
 	</div>
@@ -1076,9 +1076,9 @@ function init() {
 
 <!-- / / / -->
 
-	<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+	<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 	<div class="section" id="sesdiv_notes" style="display:none">
-		<div>If you notice that the order of the LAN Ports are incorrectly mapped, <a href="http://www.linksysinfo.org/index.php?threads/can-vlan-gui-port-order-be-corrected.70160/#post-247634/"> <b>please follow these instructions to get it corrected.</b></a></div>
+		<div>If you notice that the order of the LAN Ports are incorrectly mapped, <a href="https://www.linksysinfo.org/index.php?threads/can-vlan-gui-port-order-be-corrected.70160/#post-247634"> <b>please follow these instructions to get it corrected.</b></a></div>
 		<br>
 		<i>VLAN Ethernet:</i> Assignments of physical ethernet interfaces to predefined LAN bridges.<br>
 		<ul>
@@ -1087,7 +1087,7 @@ function init() {
 			<li><b>1-4 &amp; WAN</b> - Which ethernet ports on the router chassis should be members of this VLAN.</li>
 			<li><b>Tag</b> - Enable 802.1Q tagging of ethernet frames on a particular port/VLAN</li>
 			<li><b>Default VLAN</b> - VLAN ID assigned to untagged frames received by the router.</li>
-			<li><b>Ethernet to Bridge mapping</b> - One and only one VLAN can be assigned to a bridge. Do not confuse Ethernet WAN (physical port) with WAN bridge (logical interface), they might or might not map onto each other</li>
+			<li><b>VLAN to Bridge mapping</b> - One and only one VLAN can be assigned to a bridge. Do not confuse Ethernet WAN (physical port) with WAN bridge (logical interface), they might or might not map onto each other</li>
 		</ul>
 		<br>
 		<div><i>VID Offset:</i> First 802.1Q VLAN tag to be used as <i>base/initial tag/VID</i> for VLAN and VID assignments. This allows using VIDs larger than 15 on (older) devices, in contiguous blocks/ranges with up to 16 VLANs/VIDs. Set to '0' (zero) to disable this feature and VLANs will have the very same/identical value for its VID, as usual (from 0 to 15).</div>

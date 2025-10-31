@@ -1,6 +1,6 @@
 /* A GNU-like <stdio.h>.
 
-   Copyright (C) 2004, 2007-2024 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2007-2025 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -20,7 +20,7 @@
 #endif
 @PRAGMA_COLUMNS@
 
-#if defined __need_FILE || defined __need___FILE || defined _GL_ALREADY_INCLUDING_STDIO_H
+#if defined __need_FILE || defined __need___FILE || defined _@GUARD_PREFIX@_ALREADY_INCLUDING_STDIO_H || defined _GL_SKIP_GNULIB_STDIO_H
 /* Special invocation convention:
    - Inside glibc header files.
    - On OSF/1 5.1 we have a sequence of nested includes
@@ -48,12 +48,12 @@
 # endif
 #endif
 
-#define _GL_ALREADY_INCLUDING_STDIO_H
+#define _@GUARD_PREFIX@_ALREADY_INCLUDING_STDIO_H
 
 /* The include_next requires a split double-inclusion guard.  */
 #@INCLUDE_NEXT@ @NEXT_STDIO_H@
 
-#undef _GL_ALREADY_INCLUDING_STDIO_H
+#undef _@GUARD_PREFIX@_ALREADY_INCLUDING_STDIO_H
 
 #ifdef _GL_DEFINED__POSIX_C_SOURCE
 # undef _GL_DEFINED__POSIX_C_SOURCE
@@ -945,7 +945,7 @@ _GL_CXXALIAS_SYS (fwrite, size_t,
                    FILE *restrict stream));
 
 /* Work around bug 11959 when fortifying glibc 2.4 through 2.15
-   <https://sourceware.org/bugzilla/show_bug.cgi?id=11959>,
+   <https://sourceware.org/PR11959>,
    which sometimes causes an unwanted diagnostic for fwrite calls.
    This affects only function declaration attributes under certain
    versions of gcc and clang, and is not needed for C++.  */

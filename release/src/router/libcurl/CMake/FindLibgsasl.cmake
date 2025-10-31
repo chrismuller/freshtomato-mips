@@ -48,6 +48,7 @@ if(CURL_USE_PKGCONFIG AND
 endif()
 
 if(LIBGSASL_FOUND)
+  set(Libgsasl_FOUND TRUE)
   string(REPLACE ";" " " LIBGSASL_CFLAGS "${LIBGSASL_CFLAGS}")
   message(STATUS "Found Libgsasl (via pkg-config): ${LIBGSASL_INCLUDE_DIRS} (found version \"${LIBGSASL_VERSION}\")")
 else()
@@ -65,12 +66,12 @@ else()
   endif()
 
   include(FindPackageHandleStandardArgs)
-    find_package_handle_standard_args(Libgsasl
-    REQUIRED_VARS
-      LIBGSASL_INCLUDE_DIR
-      LIBGSASL_LIBRARY
-    VERSION_VAR
-      LIBGSASL_VERSION
+  find_package_handle_standard_args(Libgsasl
+  REQUIRED_VARS
+    LIBGSASL_INCLUDE_DIR
+    LIBGSASL_LIBRARY
+  VERSION_VAR
+    LIBGSASL_VERSION
   )
 
   if(LIBGSASL_FOUND)

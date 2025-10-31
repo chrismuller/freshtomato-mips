@@ -419,7 +419,7 @@ function init() {
 	<div class="section">
 		<div class="log-searchbox">
 
-			<span class="log-clear">&raquo; <a href="javascript:scrollToBottom()">Scroll to bottom ⏬</a></span>
+			<span class="log-clear">&raquo; <a href="javascript:scrollToBottom()">Scroll to bottom<span class="scrollbm_icon"> ⏬</span></a></span>
 
 			<span>
 				Filter level: &nbsp;
@@ -451,12 +451,13 @@ function init() {
 		<div id="log-refresh-time"></div>
 
 		<div class="log-clear log-viewlast">
-			<span class="log-clear">&raquo; <a href="javascript:scrollToBottom()">Scroll to bottom ⏬</a></span>
-			<span style="display:block;margin-top:1em">&nbsp;</span>
-			<span>&raquo; <a href="logs/syslog.txt?_http_id=<% nv(http_id) %>">Download Log File 🔽</a></span><br>
-			<span>&raquo; <a href="admin-log.asp">Logging Configuration ⚙️</a></span><br><br>
+			<span class="log-clear">&raquo; <a href="javascript:scrollToBottom()">Scroll to bottom <span class="scrollbm_icon">⏬</span></a></span>
+			<span style="display:block;margin-top:0.9em">&nbsp;</span>
+			<span class="log-download">&raquo; <a href="logs/syslog.txt?_http_id=<% nv(http_id) %>">Download Log File <span class="download_icon">🔽</span></a></span>
+			<span style="display:block;line-height:0.3em">&nbsp;</span>
+			<span class="log-configuration">&raquo; <a href="admin-log.asp">Logging Configuration <span class="lconfig_icon">⚙️</span></a></span>
+			<br><br>
 		</div>
-
 		<div class="log-viewlast">
 			<div class="log-viewlast-left">&raquo; <a href="javascript:viewLast(25)" id="entries25">Trim to last 25 entries</a></div><div class="log-viewlast-right"><a href="logs/view.cgi?which=25&amp;_http_id=<% nv(http_id) %>">(RAW)</a></div><br>
 			<div class="log-viewlast-left">&raquo; <a href="javascript:viewLast(50)" id="entries50">Trim to last 50 entries</a></div><div class="log-viewlast-right"><a href="logs/view.cgi?which=50&amp;_http_id=<% nv(http_id) %>">(RAW)</a></div><br>
@@ -475,7 +476,7 @@ function init() {
 <div id="footer">
 	<div class="log-controls">
 		<span id="footer-msg2" style="display:none">Highlighted row copied to clipboard.</span>
-		<img src="spin.gif" alt="" id="refresh-spinner">
+		<img src="spin.svg" alt="" id="refresh-spinner">
 		<script>genStdTimeList('refresh-time', 'One off', 0);</script>
 		<input type="button" value="Refresh" onclick="ref.toggle()" id="refresh-button">
 	</div>

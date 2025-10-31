@@ -77,7 +77,7 @@ function save() {
 
 	var a = [];
 	if (fom.f_nr_crond.checked) a.push('crond');
-/*	if (fom.f_nr_dnsmasq.checked) a.push('dnsmasq'); */
+	if (fom.f_nr_dnsmasq.checked) a.push('dnsmasq');
 	if (fom.f_nr_hotplug2.checked) a.push('hotplug2');
 	if (fom.f_nr_igmprt.checked) a.push('igmprt');
 	if (fom.f_nr_ntpd.checked) a.push('ntpd');
@@ -152,13 +152,13 @@ function init() {
 			{ title: 'Enable cprintf output to console', name: 'f_debug_cprintf', type: 'checkbox', value: nvram.debug_cprintf != '0' },
 			{ title: 'Enable cprintf output to /tmp/cprintf', name: 'f_debug_cprintf_file', type: 'checkbox', value: nvram.debug_cprintf_file != '0' },
 			{ title: 'Enable DDNS output to /tmp/mdu-*', name: 'f_debug_ddns', type: 'checkbox', value: nvram.debug_ddns != '0' },
-			{ title: 'Enable segfault logging', name: 'f_debug_logsegfault', type: 'checkbox', value: nvram.debug_logsegfault != '0' },
+			{ title: 'Enable segfault logging', name: 'f_debug_logsegfault', type: 'checkbox', suffix: ' <small>(requires reboot)<\/small>', value: nvram.debug_logsegfault != '0' },
 			{ title: 'Count cache memory, buffers and reclaimable slab memory as free memory', name: 'f_cafree', type: 'checkbox', value: nvram.t_cafree == '1' },
 			{ title: 'Avoid displaying LAN to router connections', name: 'f_hidelr', type: 'checkbox', value: nvram.t_hidelr == '1' },
 			{ title: 'Kernel printk log level', name: 'f_console_loglevel', type: 'select', options: [[1,'Emergency'],[2,'Alert'],[3,'Critical'],[4,'Error'],[5,'Warning'],[6,'Notice'],[7,'Info'],[8,'Debug']], value: fixInt(nvram.console_loglevel, 1, 8, 1) },
 			{ title: 'Do not restart the following process if they die', multi: [
 				{ name: 'f_nr_crond', type: 'checkbox', suffix: ' crond<br>', value: (nvram.debug_norestart.indexOf('crond') != -1) },
-/*				{ name: 'f_nr_dnsmasq', type: 'checkbox', suffix: ' dnsmasq<br>', value: (nvram.debug_norestart.indexOf('dnsmasq') != -1) }, */
+				{ name: 'f_nr_dnsmasq', type: 'checkbox', suffix: ' dnsmasq<br>', value: (nvram.debug_norestart.indexOf('dnsmasq') != -1) },
 				{ name: 'f_nr_hotplug2', type: 'checkbox', suffix: ' hotplug2<br>', value: (nvram.debug_norestart.indexOf('hotplug2') != -1) },
 				{ name: 'f_nr_igmprt', type: 'checkbox', suffix: ' igmprt<br>', value: (nvram.debug_norestart.indexOf('igmprt') != -1) },
 				{ name: 'f_nr_ntpd', type: 'checkbox', suffix: ' ntpd<br>', value: (nvram.debug_norestart.indexOf('ntpd') != -1) }
@@ -198,7 +198,7 @@ function init() {
 	</div>
 </div>
 
-<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<li><b>Avoid performing an NVRAM commit</b> - To be used only for debugging. This prevents configuration changes from being saved permanently.</li>

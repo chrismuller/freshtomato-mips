@@ -20,14 +20,17 @@
 <% css(); %>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="wireless.jsx?_http_id=<% nv(http_id); %>"></script>
-<script src="bwm-common.js?rel=<% version(); %>"></script>
 <script src="bwm-hist.js?rel=<% version(); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
 
 <script>
-
+//	<% jsdefaults(); %>
 //	<% devlist(); %>
+</script>
 
+<script src="bwm-common.js?rel=<% version(); %>"></script>
+
+<script>
 var cprefix = 'ipt_';
 var updateInt = 60;
 var updateDiv = updateInt;
@@ -380,7 +383,7 @@ REMOVE-END */
 
 <div id="footer">
 	<span id="dtime"></span>
-	<img src="spin.gif" id="refresh-spinner" alt="" onclick="debugTime=1">
+	<img src="spin.svg" id="refresh-spinner" alt="" onclick="debugTime=1">
 	<input type="button" value="Refresh" id="refresh-button" onclick="ref.toggleX()">
 </div>
 

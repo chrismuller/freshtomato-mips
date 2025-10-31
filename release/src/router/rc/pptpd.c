@@ -17,7 +17,9 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
- * $Id:
+ * Fixes/updates (C) 2018 - 2025 pedro
+ * https://freshtomato.org/
+ *
  */
 
 
@@ -115,7 +117,8 @@ static void build_pptpd_firewall(void)
 	            nvram_safe_get("pptpd_ipup_script"));
 #ifdef TCONFIG_BCMARM
 	if (!ctf_disable) /* bypass CTF if enabled */
-		fprintf(fp, "iptables -t mangle -A FORWARD -i $1 -m state --state NEW -j MARK --set-mark 0x01/0x7\n");
+		fprintf(fp, "iptables -t mangle -A PREROUTING -i $1 -j MARK --set-mark 0x01/0x7\n"
+			    "iptables -t mangle -A POSTROUTING -o $1 -j MARK --set-mark 0x01/0x7\n");
 #endif /* TCONFIG_BCMARM */
 	fclose(fp);
 
@@ -138,7 +141,8 @@ static void build_pptpd_firewall(void)
 	            nvram_safe_get("pptpd_ipdown_script"));
 #ifdef TCONFIG_BCMARM
 	if (!ctf_disable) /* bypass CTF if enabled */
-		fprintf(fp, "iptables -t mangle -D FORWARD -i $1 -m state --state NEW -j MARK --set-mark 0x01/0x7\n");
+		fprintf(fp, "iptables -t mangle -D PREROUTING -i $1 -j MARK --set-mark 0x01/0x7\n"
+			    "iptables -t mangle -D POSTROUTING -o $1 -j MARK --set-mark 0x01/0x7\n");
 #endif /* TCONFIG_BCMARM */
 	fclose(fp);
 
@@ -355,10 +359,12 @@ void stop_pptpd(void)
 	if (pid > 0)
 		logmsg(LOG_INFO, "pptpd is stopped");
 
+	simple_lock("firewall");
 	run_del_firewall_script(PPTPD_FW_SCRIPT, PPTPD_FW_DEL_SCRIPT);
 
 	/* clean-up */
 	system("/bin/rm -rf "PPTPD_DIR);
+	simple_unlock("firewall");
 }
 
 void write_pptpd_dnsmasq_config(FILE* f)
@@ -377,6 +383,7 @@ void run_pptpd_firewall_script(void)
 	FILE *fp;
 
 	/* first remove existing firewall rule(s) */
+	simple_lock("firewall");
 	run_del_firewall_script(PPTPD_FW_SCRIPT, PPTPD_FW_DEL_SCRIPT);
 
 	/* then (re-)add firewall rule(s) */
@@ -386,4 +393,5 @@ void run_pptpd_firewall_script(void)
 		eval(PPTPD_FW_SCRIPT);
 		fix_chain_in_drop();
 	}
+	simple_unlock("firewall");
 }

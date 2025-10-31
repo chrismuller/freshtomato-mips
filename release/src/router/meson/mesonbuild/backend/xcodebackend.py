@@ -176,6 +176,15 @@ class PbxDict:
         self.keys.add(key)
         self.items.append(item)
 
+    def get_item(self, key: str) -> PbxDictItem:
+        assert key in self.keys
+        for item in self.items:
+            if not isinstance(item, PbxDictItem):
+                continue
+            if item.key == key:
+                return item
+        return None
+
     def has_item(self, key: str) -> bool:
         return key in self.keys
 
@@ -230,7 +239,7 @@ class XCodeBackend(backends.Backend):
     def __init__(self, build: T.Optional[build.Build], interpreter: T.Optional[Interpreter]):
         super().__init__(build, interpreter)
         self.project_uid = self.environment.coredata.lang_guids['default'].replace('-', '')[:24]
-        self.buildtype = T.cast('str', self.environment.coredata.get_option(OptionKey('buildtype')))
+        self.buildtype = T.cast('str', self.environment.coredata.optstore.get_value_for(OptionKey('buildtype')))
         self.project_conflist = self.gen_id()
         self.maingroup_id = self.gen_id()
         self.all_id = self.gen_id()
@@ -272,7 +281,7 @@ class XCodeBackend(backends.Backend):
 
     @functools.lru_cache(maxsize=None)
     def get_target_dir(self, target: T.Union[build.Target, build.CustomTargetIndex]) -> str:
-        dirname = os.path.join(target.get_subdir(), T.cast('str', self.environment.coredata.get_option(OptionKey('buildtype'))))
+        dirname = os.path.join(target.get_subdir(), T.cast('str', self.environment.coredata.optstore.get_value_for(OptionKey('buildtype'))))
         #os.makedirs(os.path.join(self.environment.get_build_dir(), dirname), exist_ok=True)
         return dirname
 
@@ -396,10 +405,23 @@ class XCodeBackend(backends.Backend):
 
     def generate_filemap(self) -> None:
         self.filemap = {} # Key is source file relative to src root.
+        self.foldermap = {}
         self.target_filemap = {}
         for name, t in self.build_targets.items():
             for s in t.sources:
                 if isinstance(s, mesonlib.File):
+                    if '/' in s.fname:
+                        # From the top level down, add the folders containing the source file.
+                        folder = os.path.split(os.path.dirname(s.fname))
+                        while folder:
+                            fpath = os.path.join(*folder)
+                            # Multiple targets might use the same folders, so store their targets with them.
+                            # Otherwise, folders and their source files will appear in the wrong places in Xcode.
+                            if (fpath, t) not in self.foldermap:
+                                self.foldermap[(fpath, t)] = self.gen_id()
+                            else:
+                                break
+                            folder = folder[:-1]
                     s = os.path.join(s.subdir, s.fname)
                     self.filemap[s] = self.gen_id()
             for o in t.objects:
@@ -1052,6 +1074,24 @@ class XCodeBackend(backends.Backend):
         main_children.add_item(frameworks_id, 'Frameworks')
         main_dict.add_item('sourceTree', '<group>')
 
+        # Define each folder as a group in Xcode. That way, it can build the file tree correctly.
+        # This must be done before the project tree group is generated, as source files are added during that phase.
+        for (path, target), id in self.foldermap.items():
+            folder_dict = PbxDict()
+            objects_dict.add_item(id, folder_dict, path)
+            folder_dict.add_item('isa', 'PBXGroup')
+            folder_children = PbxArray()
+            folder_dict.add_item('children', folder_children)
+            folder_dict.add_item('name', '"{}"'.format(path.rsplit('/', 1)[-1]))
+            folder_dict.add_item('path', f'"{path}"')
+            folder_dict.add_item('sourceTree', 'SOURCE_ROOT')
+
+            # Add any detected subdirectories (not declared as subdir()) here, but only one level higher.
+            # Example: In "root", add "root/sub", but not "root/sub/subtwo".
+            for path_dep, target_dep in self.foldermap:
+                if path_dep.startswith(path) and path_dep.split('/', 1)[0] == path.split('/', 1)[0] and path_dep != path and path_dep.count('/') == path.count('/') + 1 and target == target_dep:
+                    folder_children.add_item(self.foldermap[(path_dep, target)], path_dep)
+
         self.add_projecttree(objects_dict, projecttree_id)
 
         resource_dict = PbxDict()
@@ -1121,6 +1161,7 @@ class XCodeBackend(backends.Backend):
         tid = t.get_id()
         group_id = self.gen_id()
         target_dict = PbxDict()
+        folder_ids = set()
         objects_dict.add_item(group_id, target_dict, tid)
         target_dict.add_item('isa', 'PBXGroup')
         target_children = PbxArray()
@@ -1130,6 +1171,18 @@ class XCodeBackend(backends.Backend):
         source_files_dict = PbxDict()
         for s in t.sources:
             if isinstance(s, mesonlib.File):
+                # If the file is in a folder, add it to the group representing that folder.
+                if '/' in s.fname:
+                    folder = '/'.join(s.fname.split('/')[:-1])
+                    folder_dict = objects_dict.get_item(self.foldermap[(folder, t)]).value.get_item('children').value
+                    temp = os.path.join(s.subdir, s.fname)
+                    folder_dict.add_item(self.fileref_ids[(tid, temp)], temp)
+                    if self.foldermap[(folder, t)] in folder_ids:
+                        continue
+                    if len(folder.split('/')) == 1:
+                        target_children.add_item(self.foldermap[(folder, t)], folder)
+                        folder_ids.add(self.foldermap[(folder, t)])
+                    continue
                 s = os.path.join(s.subdir, s.fname)
             elif isinstance(s, str):
                 s = os.path.join(t.subdir, s)
@@ -1596,6 +1649,7 @@ class XCodeBackend(backends.Backend):
             headerdirs = []
             bridging_header = ""
             is_swift = self.is_swift_target(target)
+            langs = set()
             for d in target.include_dirs:
                 for sd in d.incdirs:
                     cd = os.path.join(d.curdir, sd)
@@ -1686,9 +1740,9 @@ class XCodeBackend(backends.Backend):
                 if compiler is None:
                     continue
                 # Start with warning args
-                warn_args = compiler.get_warn_args(target.get_option(OptionKey('warning_level')))
-                copt_proxy = target.get_options()
-                std_args = compiler.get_option_compile_args(copt_proxy)
+                warn_args = compiler.get_warn_args(self.get_target_option(target, 'warning_level'))
+                std_args = compiler.get_option_compile_args(target, self.environment, target.subproject)
+                std_args += compiler.get_option_std_args(target, self.environment, target.subproject)
                 # Add compile args added using add_project_arguments()
                 pargs = self.build.projects_args[target.for_machine].get(target.subproject, {}).get(lang, [])
                 # Add compile args added using add_global_arguments()
@@ -1715,6 +1769,7 @@ class XCodeBackend(backends.Backend):
                         lang = 'c'
                     elif lang == 'objcpp':
                         lang = 'cpp'
+                    langs.add(lang)
                     langname = LANGNAMEMAP[lang]
                     langargs.setdefault(langname, [])
                     langargs[langname] = cargs + cti_args + args
@@ -1736,9 +1791,9 @@ class XCodeBackend(backends.Backend):
             if target.suffix:
                 suffix = '.' + target.suffix
                 settings_dict.add_item('EXECUTABLE_SUFFIX', suffix)
-            settings_dict.add_item('GCC_GENERATE_DEBUGGING_SYMBOLS', BOOL2XCODEBOOL[target.get_option(OptionKey('debug'))])
+            settings_dict.add_item('GCC_GENERATE_DEBUGGING_SYMBOLS', BOOL2XCODEBOOL[self.get_target_option(target, 'debug')])
             settings_dict.add_item('GCC_INLINES_ARE_PRIVATE_EXTERN', 'NO')
-            opt_flag = OPT2XCODEOPT[target.get_option(OptionKey('optimization'))]
+            opt_flag = OPT2XCODEOPT[self.get_target_option(target, 'optimization')]
             if opt_flag is not None:
                 settings_dict.add_item('GCC_OPTIMIZATION_LEVEL', opt_flag)
             if target.has_pch:
@@ -1776,6 +1831,8 @@ class XCodeBackend(backends.Backend):
             settings_dict.add_item('SECTORDER_FLAGS', '')
             if is_swift and bridging_header:
                 settings_dict.add_item('SWIFT_OBJC_BRIDGING_HEADER', bridging_header)
+                if self.objversion >= 60 and target.uses_swift_cpp_interop():
+                    settings_dict.add_item('SWIFT_OBJC_INTEROP_MODE', 'objcxx')
             settings_dict.add_item('BUILD_DIR', symroot)
             settings_dict.add_item('OBJROOT', f'{symroot}/build')
             sysheader_arr = PbxArray()
@@ -1793,7 +1850,7 @@ class XCodeBackend(backends.Backend):
         header_arr = PbxArray()
         for i in header_dirs:
             np = os.path.normpath(i)
-            # Make sure Xcode will not split single path into separate entries, escaping space with a slash is not enought
+            # Make sure Xcode will not split single path into separate entries, escaping space with a slash is not enough
             item = f'"\\\"{np}\\\""' if ' ' in np else f'"{np}"'
             header_arr.add_item(item)
         return header_arr

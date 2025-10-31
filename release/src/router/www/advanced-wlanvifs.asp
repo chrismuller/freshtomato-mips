@@ -30,7 +30,7 @@
 
 <script>
 
-//	<% nvram("wl_auth,wl_auth_mode,wl_ap_isolate,wl_bss_enabled,wl_channel,wl_closed,wl_corerev,wl_crypto,wl_hwaddr,wl_ifname,wl_key,wl_key1,wl_key2,wl_key3,wl_key4,wl_lazywds,wl_mode,wl_nband,wl_nbw_cap,wl_nctrlsb,wl_net_mode,wl_passphrase,wl_phytype,wl_radio,wl_radius_ipaddr,wl_radius_key,wl_radius_port,wl_security_mode,wl_ssid,wl_vifs,wl_wds,wl_wds_enable,wl_wep_bit,wl_wpa_gtk_rekey,wl_wpa_psk,wl_bss_maxassoc,wl_wme,lan_ifname,lan_ifnames,lan1_ifname,lan1_ifnames,lan2_ifname,lan2_ifnames,lan3_ifname,lan3_ifnames,t_features,wl_macmode,wl_maclist");%>
+//	<% nvram("wl_auth,wl_auth_mode,wl_ap_isolate,wl_bss_enabled,wl_channel,wl_closed,wl_corerev,wl_crypto,wl_hwaddr,wl_ifname,wl_key,wl_key1,wl_key2,wl_key3,wl_key4,wl_lazywds,wl_mode,wl_nband,wl_nbw_cap,wl_nctrlsb,wl_net_mode,wl_passphrase,wl_phytype,wl_radio,wl_radius_ipaddr,wl_radius_key,wl_radius_port,wl_security_mode,wl_ssid,wl_vifs,wl_wds,wl_wds_enable,wl_wep_bit,wl_wpa_gtk_rekey,wl_wpa_psk,wl_bss_maxassoc,wl_wme,lan_ifname,lan_ifnames,t_features,wl_macmode,wl_maclist");%>
 
 var cprefix = 'advanced_wlanvifs';
 var vifs_possible = [];
@@ -1323,7 +1323,7 @@ function init() {
 
 <!-- / / / -->
 
-		<div class="section-title">Wireless Interfaces Details <small><i><a href="javascript:toggleVisibility(cprefix,'details');"><span id="sesdiv_details_showhide">(Show)</span></a></i></small></div>
+		<div class="section-title">Wireless Interfaces Details <small><i><a href="javascript:toggleVisibility(cprefix,'details');" id="toggleLink-details"><span id="sesdiv_details_showhide">(Show)</span></a></i></small></div>
 		<div class="section" id="sesdiv_details" style="display:none">
 			<script>
 				for (var uidx = 0; uidx < wl_ifaces.length; ++uidx) {
@@ -1339,7 +1339,7 @@ function init() {
 
 <!-- / / / -->
 
-		<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+		<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 		<div class="section" id="sesdiv_notes" style="display:none">
 			<ul>
 				<li><b>Warning!</b> Avoid using 'virtual interfaces' on interface in Wireless Ethernet Bridge or Media Bridge mode due to possible problems.</li>
@@ -1448,7 +1448,7 @@ function init() {
 /* only if primary VIF */
 				if (u.toString().indexOf('.') < 0) {
 					f.push (
-						{ title: 'Channel', name: 'wl'+u+'_channel', type: 'select', options: ghz[uidx], prefix: '<span id="__wl'+u+'_channel">', suffix: '<\/span> <input type="button" id="_f_wl'+u+'_scan" value="Scan" onclick="scanButton('+u+')"> <img src="spin.gif" alt="" id="spin'+u+'">', value: nvram['wl'+u+'_channel'] },
+						{ title: 'Channel', name: 'wl'+u+'_channel', type: 'select', options: ghz[uidx], prefix: '<span id="__wl'+u+'_channel">', suffix: '<\/span> <input type="button" id="_f_wl'+u+'_scan" value="Scan" onclick="scanButton('+u+')"> <img src="spin.svg" alt="" id="spin'+u+'">', value: nvram['wl'+u+'_channel'] },
 						{ title: 'Channel Width', name: 'wl'+u+'_nbw_cap', type: 'select', options: [], value: nvram['wl'+u+'_nbw_cap'], prefix: '<span id="__wl'+u+'_nbw_cap">', suffix: '<\/span>' },
 						{ title: 'Control Sideband', name: 'f_wl'+u+'_nctrlsb', type: 'select', options: [['lower','Lower'],['upper','Upper']], value: (nvram['wl'+u+'_nctrlsb'] == 'none') ? 'lower' : nvram['wl'+u+'_nctrlsb'] }
 					);

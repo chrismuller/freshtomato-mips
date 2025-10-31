@@ -37,7 +37,7 @@
  *
  * Modified for Tomato Firmware
  * Portions, Copyright (C) 2006-2009 Jonathan Zarate
- * Fixes/updates (C) 2018 - 2023 pedro
+ * Fixes/updates (C) 2018 - 2025 pedro
  *
  */
 
@@ -235,7 +235,8 @@ static void set_lan_hostname(const char *wan_hostname)
 {
 	const char *s;
 	char *lan_hostname;
-	char hostname[16];
+	char buf[16], buf2[8];
+	int i;
 	FILE *f;
 
 	nvram_set("lan_hostname", wan_hostname);
@@ -243,13 +244,14 @@ static void set_lan_hostname(const char *wan_hostname)
 		/* derive from et0 mac address */
 		s = nvram_get("lan_hwaddr");
 		if (s && strlen(s) >= 17) {
-			snprintf(hostname, sizeof(hostname), "FT-%c%c%c%c%c%c%c%c%c%c%c%c", s[0], s[1], s[3], s[4], s[6], s[7], s[9], s[10], s[12], s[13], s[15], s[16]);
+			memset(buf, 0, sizeof(buf));
+			snprintf(buf, sizeof(buf), "FT-%c%c%c%c%c%c%c%c%c%c%c%c", s[0], s[1], s[3], s[4], s[6], s[7], s[9], s[10], s[12], s[13], s[15], s[16]);
 
 			if ((f = fopen("/proc/sys/kernel/hostname", "w"))) {
-				fputs(hostname, f);
+				fputs(buf, f);
 				fclose(f);
 			}
-			nvram_set("lan_hostname", hostname);
+			nvram_set("lan_hostname", buf);
 		}
 	}
 
@@ -257,14 +259,15 @@ static void set_lan_hostname(const char *wan_hostname)
 	if ((f = fopen("/etc/hosts", "w"))) {
 		fprintf(f, "127.0.0.1 localhost\n");
 
-		if ((s = nvram_get("lan_ipaddr")) && (*s))
-			fprintf(f, "%s %s %s-lan\n", s, lan_hostname, lan_hostname);
-		if ((s = nvram_get("lan1_ipaddr")) && (*s) && (strcmp(s, "") != 0))
-			fprintf(f, "%s %s-lan1\n", s, lan_hostname);
-		if ((s = nvram_get("lan2_ipaddr")) && (*s) && (strcmp(s, "") != 0))
-			fprintf(f, "%s %s-lan2\n", s, lan_hostname);
-		if ((s = nvram_get("lan3_ipaddr")) && (*s) && (strcmp(s, "") != 0))
-			fprintf(f, "%s %s-lan3\n", s, lan_hostname);
+		for (i = 0; i < BRIDGE_COUNT; i++) {
+			memset(buf, 0, sizeof(buf));
+			snprintf(buf, sizeof(buf), (i == 0 ? "lan_ipaddr" : "lan%d_ipaddr"), i);
+			if ((s = nvram_get(buf)) && (*s)) {
+				memset(buf2, 0, sizeof(buf2));
+				snprintf(buf2, sizeof(buf2), "%d", i);
+				fprintf(f, "%s %s %s-lan%s\n", s, (i == 0 ? lan_hostname : ""), lan_hostname, (i == 0 ? "" : buf2));
+			}
+		}
 #ifdef TCONFIG_IPV6
 		if (ipv6_enabled()) {
 			fprintf(f, "::1 localhost ip6-localhost ip6-loopback\n");
@@ -797,19 +800,35 @@ void load_wl(void)
 }
 #endif /* TCONFIG_BCM714 */
 
-int disabled_wl(int idx, int unit, int subunit, void *param)
+/* check for disabled wl vifs */
+int disabled_wl_vif(int idx, int unit, int subunit, void *param)
 {
 	char *ifname;
 
 	ifname = nvram_safe_get(wl_nvname("ifname", unit, subunit));
 
-	/* skip disabled wl vifs */
 	if (strncmp(ifname, "wl", 2) == 0 && strchr(ifname, '.') &&
 	    !nvram_get_int(wl_nvname("bss_enabled", unit, subunit)))
 		return 1;
 
 	return 0;
 }
+
+#ifdef TCONFIG_BCMARM
+/* check for enabled wl vifs */
+int enabled_wl_vif(int idx, int unit, int subunit, void *param)
+{
+	char *ifname;
+
+	ifname = nvram_safe_get(wl_nvname("ifname", unit, subunit));
+
+	if (strncmp(ifname, "wl", 2) == 0 && strchr(ifname, '.') &&
+	    nvram_get_int(wl_nvname("bss_enabled", unit, subunit)))
+		return 1;
+
+	return 0;
+}
+#endif /* TCONFIG_BCMARM */
 
 static int set_wlmac(int idx, int unit, int subunit, void *param)
 {
@@ -1932,8 +1951,12 @@ void do_static_routes(int add)
 {
 	char *buf;
 	char *p, *q;
-	char *dest, *mask, *gateway, *metric, *ifname;
-	int r;
+	char *dest, *mask, *gateway, *metric, *if_tmp, *ifname;
+	int r, found_lan;
+	unsigned int i;
+	char name[8], ip[16], proto_key[16], ip_key[32], if_key[16];
+	char *modem_ip, *end;
+	unsigned char c;
 
 	if ((buf = strdup(nvram_safe_get(add ? "routes_static" : "routes_static_saved"))) == NULL)
 		return;
@@ -1943,22 +1966,52 @@ void do_static_routes(int add)
 	else
 		nvram_unset("routes_static_saved");
 
+	ifname = nvram_safe_get("wan_ifname"); /* default */
 	p = buf;
 	while ((q = strsep(&p, ">")) != NULL) {
-		if (vstrsep(q, "<", &dest, &gateway, &mask, &metric, &ifname) < 5)
+		if (vstrsep(q, "<", &dest, &gateway, &mask, &metric, &if_tmp) < 5)
 			continue;
 
-		ifname = nvram_safe_get(((strcmp(ifname, "LAN") == 0) ? "lan_ifname" :
-					((strcmp(ifname, "LAN1") == 0) ? "lan1_ifname" :
-					((strcmp(ifname, "LAN2") == 0) ? "lan2_ifname" :
-					((strcmp(ifname, "LAN3") == 0) ? "lan3_ifname" :
-					((strcmp(ifname, "WAN2") == 0) ? "wan2_iface" :
-					((strcmp(ifname, "WAN3") == 0) ? "wan3_iface" :
-					((strcmp(ifname, "WAN4") == 0) ? "wan4_iface" :
-					((strcmp(ifname, "MAN2") == 0) ? "wan2_ifname" :
-					((strcmp(ifname, "MAN3") == 0) ? "wan3_ifname" :
-					((strcmp(ifname, "MAN4") == 0) ? "wan4_ifname" :
-					((strcmp(ifname, "WAN") == 0) ? "wan_iface" : "wan_ifname"))))))))))));
+		found_lan = 0;
+		for (i = 0; i < BRIDGE_COUNT; i++) {
+			/* LAN, LAN1, LAN2, LAN3 set in advanced-routing.asp */
+			memset(name, 0, sizeof(name));
+			snprintf(name, sizeof(name), (i == 0 ? "LAN" : "LAN%u"), i);
+			if (strcmp(if_tmp, name) == 0) {
+				memset(if_key, 0, sizeof(if_key));
+				snprintf(if_key, sizeof(if_key), (i == 0 ? "lan_ifname" : "lan%u_ifname"), i);
+				ifname = nvram_safe_get(if_key); /* set */
+				found_lan = 1;
+				break;
+			}
+		}
+		if (!found_lan) {
+			/*
+			 * wan_iface = WAN
+			 * wan_ifname = MAN
+			 */
+			for (i = 1; i <= MWAN_MAX; i++) {
+				/* WAN, WAN2, WAN3, WAN4 set in advanced-routing.asp */
+				memset(name, 0, sizeof(name));
+				snprintf(name, sizeof(name), (i == 1 ? "WAN" : "WAN%u"), i);
+				if (strcmp(if_tmp, name) == 0) {
+					memset(if_key, 0, sizeof(if_key));
+					snprintf(if_key, sizeof(if_key), (i == 1 ? "wan_iface" : "wan%u_iface"), i);
+					ifname = nvram_safe_get(if_key); /* set */
+					break;
+				}
+				/* MAN, MAN2, MAN3, MAN4 set in advanced-routing.asp */
+				memset(name, 0, sizeof(name));
+				snprintf(name, sizeof(name), (i == 1 ? "MAN" : "MAN%u"), i);
+				if (strcmp(if_tmp, name) == 0) {
+					memset(if_key, 0, sizeof(if_key));
+					snprintf(if_key, sizeof(if_key), (i == 1 ? "wan_ifname" : "wan%u_ifname"), i);
+					ifname = nvram_safe_get(if_key); /* set */
+					break;
+				}
+			}
+		}
+
 		logmsg(LOG_WARNING, "Static route %s: ifname=%s, metric=%s, dest=%s, gateway=%s, mask=%s", (add ? "added" : "deleted"), ifname, metric, dest, gateway, mask);
 
 		if (add) {
@@ -1969,65 +2022,36 @@ void do_static_routes(int add)
 				sleep(1);
 			}
 		}
-		else {
+		else
 			route_del(ifname, atoi(metric), dest, gateway, mask);
-		}
 	}
 	free(buf);
 
-	char *wan_modem_ipaddr;
-	if ((nvram_match("wan_proto", "pppoe") || nvram_match("wan_proto", "dhcp") || nvram_match("wan_proto", "static"))
-	    && (wan_modem_ipaddr = nvram_safe_get("wan_modem_ipaddr")) && *wan_modem_ipaddr && !nvram_match("wan_modem_ipaddr","0.0.0.0") 
-	    && (!foreach_wif(1, NULL, is_sta))) {
-		char ip[16];
-		char *end = rindex(wan_modem_ipaddr,'.') + 1;
-		unsigned char c = atoi(end);
-		char *iface = nvram_safe_get("wan_ifname");
+	for (i = 1; i <= MWAN_MAX; i++) {
+		memset(name, 0, sizeof(name));
+		snprintf(name, sizeof(name), (i == 1 ? "wan" : "wan%u"), i);
 
-		snprintf(ip, sizeof(ip), "%.*s%hhu", end-wan_modem_ipaddr, wan_modem_ipaddr, (unsigned char)(c^1^((c&2)^((c&1)<<1))));
-		eval("ip", "addr", add ?"add" : "del", ip, "peer", wan_modem_ipaddr, "dev", iface);
+		memset(proto_key, 0, sizeof(proto_key));
+		memset(ip_key, 0, sizeof(ip_key));
+		memset(if_key, 0, sizeof(if_key));
+		snprintf(proto_key, sizeof(proto_key), "%s_proto", name);
+		snprintf(ip_key, sizeof(ip_key), "%s_modem_ipaddr", name);
+		snprintf(if_key, sizeof(if_key), "%s_ifname", name);
+
+		if (!(nvram_match(proto_key, "pppoe") || nvram_match(proto_key, "dhcp") || nvram_match(proto_key, "static")))
+			continue;
+
+		modem_ip = nvram_safe_get(ip_key);
+		if ((!modem_ip) || (!*modem_ip) || (nvram_match(ip_key, "0.0.0.0")) || (foreach_wif(1, NULL, is_sta)))
+			continue;
+
+		end = rindex(modem_ip, '.') + 1;
+		c = atoi(end);
+		memset(ip, 0, sizeof(ip));
+		snprintf(ip, sizeof(ip), "%.*s%hhu", (end - modem_ip), modem_ip, (unsigned char)(c ^ 1 ^ ((c & 2) ^ ((c & 1) << 1))));
+
+		eval("ip", "addr", add ? "add" : "del", ip, "peer", modem_ip, "dev", nvram_safe_get(if_key));
 	}
-
-	char *wan2_modem_ipaddr;
-	if ((nvram_match("wan2_proto", "pppoe") || nvram_match("wan2_proto", "dhcp") || nvram_match("wan2_proto", "static"))
-	    && (wan2_modem_ipaddr = nvram_safe_get("wan2_modem_ipaddr")) && *wan2_modem_ipaddr && !nvram_match("wan2_modem_ipaddr","0.0.0.0") 
-	    && (!foreach_wif(1, NULL, is_sta))) {
-		char ip[16];
-		char *end = rindex(wan2_modem_ipaddr,'.') + 1;
-		unsigned char c = atoi(end);
-		char *iface = nvram_safe_get("wan2_ifname");
-
-		snprintf(ip, sizeof(ip), "%.*s%hhu", end-wan2_modem_ipaddr, wan2_modem_ipaddr, (unsigned char)(c^1^((c&2)^((c&1)<<1))) );
-		eval("ip", "addr", add ?"add" : "del", ip, "peer", wan2_modem_ipaddr, "dev", iface);
-	}
-
-#ifdef TCONFIG_MULTIWAN
-	char *wan3_modem_ipaddr;
-	if ((nvram_match("wan3_proto", "pppoe") || nvram_match("wan3_proto", "dhcp") || nvram_match("wan3_proto", "static"))
-	    && (wan3_modem_ipaddr = nvram_safe_get("wan3_modem_ipaddr")) && *wan3_modem_ipaddr && !nvram_match("wan3_modem_ipaddr","0.0.0.0") 
-	    && (!foreach_wif(1, NULL, is_sta))) {
-		char ip[16];
-		char *end = rindex(wan3_modem_ipaddr,'.') + 1;
-		unsigned char c = atoi(end);
-		char *iface = nvram_safe_get("wan3_ifname");
-
-		snprintf(ip, sizeof(ip), "%.*s%hhu", end-wan3_modem_ipaddr, wan3_modem_ipaddr, (unsigned char)(c^1^((c&2)^((c&1)<<1))) );
-		eval("ip", "addr", add ?"add" : "del", ip, "peer", wan3_modem_ipaddr, "dev", iface);
-	}
-
-	char *wan4_modem_ipaddr;
-	if ((nvram_match("wan4_proto", "pppoe") || nvram_match("wan4_proto", "dhcp") || nvram_match("wan4_proto", "static"))
-	    && (wan4_modem_ipaddr = nvram_safe_get("wan4_modem_ipaddr")) && *wan4_modem_ipaddr && !nvram_match("wan4_modem_ipaddr","0.0.0.0") 
-	    && (!foreach_wif(1, NULL, is_sta))) {
-		char ip[16];
-		char *end = rindex(wan4_modem_ipaddr,'.') + 1;
-		unsigned char c = atoi(end);
-		char *iface = nvram_safe_get("wan4_ifname");
-
-		snprintf(ip, sizeof(ip), "%.*s%hhu", end-wan4_modem_ipaddr, wan4_modem_ipaddr, (unsigned char)(c^1^((c&2)^((c&1)<<1))) );
-		eval("ip", "addr", add ?"add" : "del", ip, "peer", wan4_modem_ipaddr, "dev", iface);
-	}
-#endif
 }
 
 void hotplug_net(void)

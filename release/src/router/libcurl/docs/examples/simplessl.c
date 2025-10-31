@@ -66,7 +66,7 @@ int main(void)
 #ifdef USE_ENGINE
   pKeyName  = "rsa_test";
   pKeyType  = "ENG";
-  pEngine   = "chil";            /* for nChiper HSM... */
+  pEngine   = "chil";            /* for nCipher HSM... */
 #else
   pKeyName  = "testkey.pem";
   pKeyType  = "PEM";
@@ -82,7 +82,7 @@ int main(void)
   curl = curl_easy_init();
   if(curl) {
     /* what call to write: */
-    curl_easy_setopt(curl, CURLOPT_URL, "HTTPS://your.favourite.ssl.site");
+    curl_easy_setopt(curl, CURLOPT_URL, "HTTPS://secure.site.example");
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, headerfile);
 
 #ifdef _MSC_VER

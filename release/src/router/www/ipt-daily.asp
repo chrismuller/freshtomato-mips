@@ -20,13 +20,16 @@
 <% css(); %>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="bwm-hist.js?rel=<% version(); %>"></script>
-<script src="bwm-common.js?rel=<% version(); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
 
 <script>
-
+//	<% jsdefaults(); %>
 //	<% devlist(); %>
+</script>
 
+<script src="bwm-common.js?rel=<% version(); %>"></script>
+
+<script>
 var cprefix = 'ipt_daily';
 try {
 //	<% bandwidth("daily","ipt"); %>
@@ -124,10 +127,17 @@ function redraw() {
 				if (fskip == 1) continue;
 			}
 
-			if ((b[1] == getNetworkAddress(nvram.lan_ipaddr,nvram.lan_netmask)) ||
-				(b[1] == getNetworkAddress(nvram.lan1_ipaddr,nvram.lan1_netmask)) ||
-				(b[1] == getNetworkAddress(nvram.lan2_ipaddr,nvram.lan2_netmask)) ||
-				(b[1] == getNetworkAddress(nvram.lan3_ipaddr,nvram.lan3_netmask))) {
+			var isSubnet = false;
+			for (var j = 0; j <= MAX_BRIDGE_ID; j++) {
+				var lan_ipaddr = nvram['lan' + (j == 0 ? '' : j) + '_ipaddr'];
+				var lan_netmask = nvram['lan' + (j == 0 ? '' : j) + '_netmask'];
+				if (lan_ipaddr && lan_netmask && b[1] == getNetworkAddress(lan_ipaddr, lan_netmask)) {
+					isSubnet = true;
+					break;
+				}
+			}
+
+			if (isSubnet) {
 					if(E('_f_subnet').checked == 0) {
 						continue;
 					}
@@ -337,7 +347,7 @@ function init() {
 	E('_f_ignorezeroes').checked = (((c = cookie.get(cprefix + '_ignorezeroes')) != null) && (c == '1'));
 
 	if (((c = cookie.get(cprefix + '_options_vis')) != null) && (c == '1')) {
-		toggleVisibility(cprefix, "options");
+		toggleVisibility(cprefix, 'options');
 	}
 
 	dg.setup();
@@ -429,7 +439,7 @@ function verifyFields(focused, quiet) {
 		<div class="tomato-grid" id="bwm-grid"></div>
 	</div>
 
-	<div class="section-title">Options <small><i><a href='javascript:toggleVisibility(cprefix,"options");'><span id="sesdiv_options_showhide">(Show)</span></a></i></small></div>
+	<div class="section-title">Options <small><i><a href="javascript:toggleVisibility(cprefix,'options');" id="toggleLink-options"><span id="sesdiv_options_showhide">(Show)</span></a></i></small></div>
 	<div class="section" id="sesdiv_options" style="display:none">
 		<script>
 			var c;

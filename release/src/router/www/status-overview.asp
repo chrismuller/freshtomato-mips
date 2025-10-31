@@ -25,7 +25,7 @@
 <!-- USB-END -->
 
 <script>
-
+//	<% jsdefaults(); %>
 var wmo = {'ap':'Access Point','sta':'Wireless Client','wet':'Wireless Ethernet Bridge','wds':'WDS'};
 var auth = {'disabled':'-','wep':'WEP','wpa_personal':'WPA Personal (PSK)','wpa_enterprise':'WPA Enterprise','wpa2_personal':'WPA2 Personal (PSK)','wpa2_enterprise':'WPA2 Enterprise','wpaX_personal':'WPA / WPA2 Personal','wpaX_enterprise':'WPA / WPA2 Enterprise','radius':'Radius'};
 var enc = {'tkip':'TKIP','aes':'AES','tkip+aes':'TKIP / AES'};
@@ -346,7 +346,7 @@ function show() {
 	for (var uidx = 0; uidx < wl_ifaces.length; ++uidx) {
 		if (wl_sunit(uidx) < 0) {
 			/* warn against unsecured wifi */
-			if (nvram['wl'+wl_fface(uidx)+'_radio'] == '1' && wlstats[uidx].radio && nvram['wl'+wl_fface(uidx)+'_net_mode'] != 'disabled' && nvram['wl'+wl_fface(uidx)+'_security_mode'] == 'disabled')
+			if (nvram['wl'+wl_fface(uidx)+'_radio'] == '1' && wlstats[uidx].radio && nvram['wl'+wl_fface(uidx)+'_net_mode'] != 'disabled' && nvram['wl'+wl_fface(uidx)+'_security_mode'] == 'disabled' && nvram['wl'+wl_fface(uidx)+'_mode'] == 'ap')
 				E('status-wifiwarn').style.display = 'block';
 			else
 				E('status-wifiwarn').style.display = 'none';
@@ -469,7 +469,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title" id="sesdiv_system-title">System <small><i><a href="javascript:toggleVisibility(cprefix,'system');"><span id="sesdiv_system_showhide">(Hide)</span></a></i></small></div>
+<div class="section-title" id="sesdiv_system-title">System <small><i><a href="javascript:toggleVisibility(cprefix,'system');" id="toggleLink-system" class="hide"><span id="sesdiv_system_showhide">(Hide)</span></a></i></small></div>
 <div class="section" id="sesdiv_system">
 <script>
 	createFieldTable('', [
@@ -504,16 +504,16 @@ function init() {
 /* USB-BEGIN */
 	foreach_wwan(function(i) {
 		W('<div id="WWANStatus'+i+'_overall" style="display:none;">');
-		W('<div class="section-title" id="wwan'+i+'-title">WWAN'+(updateWWANTimers > 1 ? i : '')+' Modem Status <small><i><a href="javascript:toggleVisibility(cprefix,\'wwan'+i+'\');"><span id="sesdiv_wwan'+i+'_showhide">(Hide)<\/span><\/a><\/i><\/small><\/div>');
+		W('<div class="section-title" id="wwan'+i+'-title">WWAN'+(updateWWANTimers > 1 ? i : '')+' Modem Status <small><i><a href="javascript:toggleVisibility(cprefix,\'wwan'+i+'\');" id="toggleLink-wwan'+i+'" class="hide"><span id="sesdiv_wwan'+i+'_showhide">(Hide)<\/span><\/a><\/i><\/small><\/div>');
 		W('<div class="section" id="sesdiv_wwan'+i+'">');
 		W('<div id="WWANStatus'+i+'">');
-		W('<div class="fields">Please wait... Initial refresh... &nbsp; <img src="spin.gif" alt="" style="vertical-align:middle"><\/div>');
+		W('<div class="fields">Please wait... Initial refresh... &nbsp; <img src="spin.svg" alt="" style="vertical-align:middle"><\/div>');
 		W('<\/div><\/div><\/div>');
 	});
 /* USB-END */
 	for (var uidx = 1; uidx <= nvram.mwan_num; ++uidx) {
 		u = (uidx > 1) ? uidx : '';
-		W('<div class="section-title" id="wan'+u+'-title">WAN'+(uidx - 1)+' <small><i><a href="javascript:toggleVisibility(cprefix,\'wan'+u+'\');"><span id="sesdiv_wan'+u+'_showhide">(Hide)<\/span><\/a><\/i><\/small><\/div>');
+		W('<div class="section-title" id="wan'+u+'-title">WAN'+(uidx - 1)+' <small><i><a href="javascript:toggleVisibility(cprefix,\'wan'+u+'\');" id="toggleLink-wan'+u+'" class="hide"><span id="sesdiv_wan'+u+'_showhide">(Hide)<\/span><\/a><\/i><\/small><\/div>');
 		W('<div class="section" id="sesdiv_wan'+u+'">');
 		createFieldTable('', [
 			{ title: 'MAC Address', text: nvram['wan'+u+'_hwaddr'] },
@@ -539,7 +539,7 @@ function init() {
 			{ title: 'Connection Uptime', rid: 'wan'+u+'uptime', text: stats.wanuptime[uidx - 1] },
 			{ title: 'Remaining Lease Time', rid: 'wan'+u+'lease', text: stats.wanlease[uidx - 1], ignore: !show_dhcpc[uidx - 1] }
 /* USB-BEGIN */
-			, { text: 'Please wait... Initial refresh... &nbsp; <img src="spin.gif" alt="" style="vertical-align:middle">', rid: "WanCustomStatus"+u, ignore: !customStatusTimers[uidx - 1] }
+			, { text: 'Please wait... Initial refresh... &nbsp; <img src="spin.svg" alt="" style="vertical-align:middle">', rid: "WanCustomStatus"+u, ignore: !customStatusTimers[uidx - 1] }
 /* USB-END */
 		]);
 		W('<span id="b'+u+'_dhcpc" style="display:none">');
@@ -559,7 +559,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title" id="sesdiv_lan-title">LAN <small><i><a href="javascript:toggleVisibility(cprefix,'lan');"><span id="sesdiv_lan_showhide">(Hide)</span></a></i></small></div>
+<div class="section-title" id="sesdiv_lan-title">LAN <small><i><a href="javascript:toggleVisibility(cprefix,'lan');" id="toggleLink-lan" class="hide"><span id="sesdiv_lan_showhide">(Hide)</span></a></i></small></div>
 <div class="section" id="sesdiv_lan">
 <script>
 	var s = '';
@@ -614,7 +614,7 @@ function init() {
 		if (wl_ifaces.length > 0)
 			W(' '+wl_display_ifname(uidx));
 
-		W(' <small><i><a href="javascript:toggleVisibility(cprefix,\'wl_'+u+'\');"><span id="sesdiv_wl_'+u+'_showhide">(Hide)<\/span><\/a><\/i><\/small>');
+		W(' <small><i><a href="javascript:toggleVisibility(cprefix,\'wl_'+u+'\');" id="toggleLink-wl_'+u+'" class="hide"><span id="sesdiv_wl_'+u+'_showhide">(Hide)<\/span><\/a><\/i><\/small>');
 		W('<\/div>');
 		W('<div class="section" id="sesdiv_wl_'+u+'">');
 		var sec = auth[nvram['wl'+u+'_security_mode']]+'';
@@ -642,7 +642,7 @@ function init() {
 			{ title: 'Interference Level', rid: 'interference'+uidx, text: stats.interference[uidx], ignore: (wl_sunit(uidx) >= 0) },
 			{ title: 'Rate', rid: 'rate'+uidx, text: wlstats[uidx].rate, ignore: (wl_sunit(uidx) >= 0) },
 /* QRCODE-BEGIN */
-			{ title: 'QR code', rid: 'qr-code'+uidx, text: '<a href="tools-qr.asp?wl='+wl_unit(uidx)+(wl_sunit(uidx) >= 0 ? '.'+wl_sunit(uidx) : '')+'"><img src="qr-icon.svg" style="width:12px;height:12px"><\/a>' },
+			{ title: 'QR code', rid: 'qr-code'+uidx, text: '<a href="tools-qr.asp?wl='+wl_unit(uidx)+(wl_sunit(uidx) >= 0 ? '.'+wl_sunit(uidx) : '')+'"><span class="qriconsvg">&nbsp;<\/span><\/a>' },
 /* QRCODE-END */
 			{ title: 'RSSI', rid: 'rssi'+uidx, text: wlstats[uidx].rssi || '', ignore: ((!wlstats[uidx].client) || (wl_sunit(uidx) >= 0)) },
 			{ title: 'Noise', rid: 'noise'+uidx, text: wlstats[uidx].noise || '', ignore: ((!wlstats[uidx].client) || (wl_sunit(uidx) >= 0)) },

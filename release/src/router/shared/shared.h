@@ -96,6 +96,16 @@ extern const char *tomato_shortver;
 #define MWAN_MAX	2
 #endif
 
+#ifdef TCONFIG_EXTSW
+#define MAX_PORT_ID	5
+#else
+#define MAX_PORT_ID	4
+#endif
+
+#if !defined(CONFIG_BCMWL6) && !defined(TCONFIG_BLINK) /* only mips RT branch */
+#define TOMATO_VLANNUM	16
+#endif
+
 enum {
 	ACT_IDLE,
 	ACT_TFTP_UPGRADE_UNUSED,
@@ -174,6 +184,7 @@ extern char *getNVRAMVar(const char *text, const int unit);
 extern int connect_timeout(int fd, const struct sockaddr *addr, socklen_t len, int timeout);
 extern int mtd_getinfo(const char *mtdname, int *part, int *size);
 extern int foreach_wif(int include_vifs, void *param, int (*func)(int idx, int unit, int subunit, void *param));
+extern void gen_urandom(char *buf1, unsigned char *buf2, size_t buf_sz, const unsigned int addtid);
 
 /* usb.c */
 #ifdef TCONFIG_USB
@@ -347,7 +358,7 @@ static inline int led(int which, int mode)
 }
 
 /* base64.c */
-extern int base64_encode(const char *in, char *out, int inlen); /* returns amount of out buffer used */
+extern int base64_encode(const unsigned char *in, char *out, int inlen); /* returns amount of out buffer used */
 extern int base64_decode(const char *in, unsigned char *out, int inlen); /* returns amount of out buffer used */
 extern unsigned int base64_encoded_len(int len);
 extern unsigned int base64_decoded_len(int len); /* maximum possible, not actual */

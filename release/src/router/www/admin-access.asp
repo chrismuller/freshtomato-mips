@@ -14,12 +14,12 @@
 <title>[<% ident(); %>] Admin: Access</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <link rel="stylesheet" type="text/css" href="<% nv('web_css'); %>.css" id="guicss">
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 
 <script>
 
-//	<% nvram("http_enable,https_enable,http_lanport,https_lanport,http_lan_listeners,http_ipv6,ipv6_service,lan1_ifname,lan2_ifname,lan3_ifname,remote_management,remote_mgt_https,remote_upgrade,web_wl_filter,web_css,web_adv_scripts,web_dir,ttb_css,ttb_loc,ttb_url,sshd_eas,sshd_pass,sshd_remote,telnetd_eas,http_wanport,http_wanport_bfm,sshd_authkeys,sshd_port,sshd_rport,sshd_forwarding,telnetd_port,rmgt_sip,https_crt_cn,https_crt_save,lan_ipaddr,ne_shlimit,sshd_motd,http_username,jffs2_auto_unmount"); %>
+//	<% nvram("http_enable,https_enable,http_lanport,https_lanport,http_lan_listeners,http_ipv6,ipv6_service,lan_ifname,remote_management,remote_mgt_https,remote_upgrade,web_wl_filter,web_css,web_adv_scripts,web_dir,ttb_css,ttb_loc,ttb_url,sshd_eas,sshd_pass,sshd_remote,telnetd_eas,http_wanport,http_wanport_bfm,sshd_authkeys,sshd_port,sshd_rport,sshd_forwarding,telnetd_port,rmgt_sip,https_crt_cn,https_crt_save,lan_ipaddr,ne_shlimit,sshd_motd,http_username,jffs2_auto_unmount"); %>
 
 var cprefix = 'admin_access';
 var changed = 0;
@@ -42,6 +42,7 @@ function show() {
 	var e = E('_sshd_button');
 	e.value = (isup.dropbear ? 'Stop' : 'Start')+' Now';
 	e.setAttribute('onclick', 'javascript:toggle(\'sshd\','+isup.dropbear+');');
+	E('_sshd_notice').innerHTML = (isup.dropbear ? '<span class="service_up"><span class="servup_image">▲ <\/span>Up<\/span>' : '<span class="service_down"><span class="servdn_image">▽ <\/span>Down<\/span>');
 	countButton += 1;
 	if (serviceLastUp[0] != isup.dropbear || countButton > 6) {
 		serviceLastUp[0] = isup.dropbear;
@@ -53,6 +54,7 @@ function show() {
 	e = E('_telnetd_button');
 	e.value = ((isup.telnetd) ? 'Stop' : 'Start')+' Now';
 	e.setAttribute('onclick', 'javascript:toggle(\'telnetd\','+(isup.telnetd)+');');
+	E('_telnetd_notice').innerHTML = (isup.telnetd ? '<span class="service_up"><span class="servup_image">▲ <\/span>Up<\/span>' : '<span class="service_down"><span class="servdn_image">▽ <\/span>Down<\/span>');
 	countButton2 += 1;
 	if (serviceLastUp2[0] != isup.telnetd || countButton2 > 6) {
 		serviceLastUp2[0] = isup.telnetd;
@@ -494,7 +496,7 @@ function init() {
 /* HTTPS-BEGIN */
 			null,
 			{ title: 'SSL Certificate', rid: 'row_sslcert' },
-				{ title: 'Common Name (CN)', indent: 2, name: 'https_crt_cn', type: 'text', maxlen: 64, size: 40, suffix: '&nbsp;<small>optional; space separated<\/small>', value: nvram.https_crt_cn },
+				{ title: 'Subject Alternative Name (SAN)', indent: 2, name: 'https_crt_cn', type: 'text', maxlen: 64, size: 40, suffix: '&nbsp;<small>optional; space separated<\/small>', value: nvram.https_crt_cn },
 				{ title: 'Regenerate', indent: 2, name: 'f_https_crt_gen', type: 'checkbox', value: 0 },
 				{ title: 'Save In NVRAM', indent: 2, name: 'f_https_crt_save', type: 'checkbox', value: nvram.https_crt_save == 1 },
 /* HTTPS-END */
@@ -552,7 +554,9 @@ function init() {
 			{ title: 'Authorized Keys', name: 'sshd_authkeys', type: 'textarea', value: nvram.sshd_authkeys }
 		]);
 	</script>
-	<input type="button" value="" onclick="" id="_sshd_button">&nbsp; <img src="spin.gif" alt="" id="spin"></div>
+	<div class="fields">
+		<span id="_sshd_notice"></span><input type="button" id="_sshd_button">&nbsp; <img src="spin.svg" alt="" id="spin">
+	</div>
 </div>
 
 <!-- / / / -->
@@ -565,7 +569,9 @@ function init() {
 			{ title: 'Port', name: 'telnetd_port', type: 'text', maxlen: 5, size: 7, value: nvram.telnetd_port }
 		]);
 	</script>
-	<input type="button" value="" onclick="" id="_telnetd_button">&nbsp; <img src="spin.gif" alt="" id="spin2"></div>
+	<div class="fields">
+		<span id="_telnetd_notice"></span><input type="button" id="_telnetd_button">&nbsp; <img src="spin.svg" alt="" id="spin2">
+	</div>
 </div>
 
 <!-- / / / -->
@@ -574,7 +580,7 @@ function init() {
 <div class="section">
 	<script>
 		createFieldTable('', [
-			{ title: 'Allowed Remote<br>IP Address', name: 'f_rmgt_sip', type: 'text', maxlen: 512, size: 64, placeholder: 'optional', suffix: '<br>&nbsp;<small>eg: 1.2.3.4, 1.2.3.4/24, 1.2.3.4 - 1.2.3.255, me.example.com - comma separated<\/small>', value: nvram.rmgt_sip },
+			{ title: 'Allowed Remote<br>IP Address', name: 'f_rmgt_sip', type: 'text', maxlen: 512, size: 64, placeholder: 'optional', suffix: '<br>&nbsp;<small>eg: 1.2.3.4, 1.2.3.4/24, 1.2.3.4-1.2.3.255, me.example.com - comma separated<\/small>', value: nvram.rmgt_sip },
 			{ title: 'Remote Web Port Protection', name: 'f_http_wanport_bfm', type: 'checkbox', suffix: '&nbsp;<small>enable brute force mitigation rule<\/small>', value: nvram.http_wanport_bfm == 1 },
 			{ title: 'Limit Connection Attempts', multi: [
 				{ suffix: '&nbsp; SSH &nbsp; / &nbsp;', name: 'f_limit_ssh', type: 'checkbox', value: (shlimit[0] & 1) != 0 },
@@ -604,7 +610,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<i>SSH Daemon (dropbear) also accepts additional configuration in the following files:</i><br>
 	<ul>

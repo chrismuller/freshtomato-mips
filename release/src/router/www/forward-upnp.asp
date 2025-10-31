@@ -14,12 +14,12 @@
 <title>[<% ident(); %>] Forwarding: UPnP IGD &amp; PCP/NAT-PMP</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 
 <script>
 
-//	<% nvram("upnp_enable,upnp_secure,upnp_custom,upnp_lan,upnp_lan1,upnp_lan2,upnp_lan3,lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname"); %>
+//	<% nvram("upnp_enable,upnp_secure,upnp_custom,upnp_lan,lan_ifname"); %>
 
 </script>
 <script src="upnp.jsx?_http_id=<% nv(http_id); %>"></script>
@@ -312,7 +312,7 @@ function init() {
 	<div class="section-title">Active Port Forwards</div>
 	<div class="section">
 		<div class="tomato-grid" id="upnp-grid"></div>
-		<div style="width:100%;text-align:right"><img src="spin.gif" id="refresh-spinner" alt=""> &nbsp;<input type="button" value="Delete All" onclick="deleteAll()" id="upnp-delete-all"></div>
+		<div style="width:100%;text-align:right"><img src="spin.svg" id="refresh-spinner" alt=""> &nbsp;<input type="button" value="Delete All" onclick="deleteAll()" id="upnp-delete-all"></div>
 	</div>
 </div>
 

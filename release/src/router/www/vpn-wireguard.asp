@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
 	FreshTomato GUI
-	Copyright (C) 2023 - 2024 pedro
+	Copyright (C) 2023 - 2025 pedro
 	https://freshtomato.org/
 
 	For use with FreshTomato Firmware only.
@@ -14,22 +14,7 @@
 <title>[<% ident(); %>] Wireguard</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<style>
-
-.co5, .co7, .co9, .co10 {
-	display: none;
-}
-
-.qrcode {
-	display: grid;
-	justify-items: center;
-	text-align: center;
-	font-size: large;
-	padding: 10px;
-}
-
-</style>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="wireguard.js?rel=<% version(); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
@@ -38,17 +23,24 @@
 <script>
 
 
-//	<% nvram("wan_ipaddr,wan_hostname,wan_domain,lan_ifname,lan_ipaddr,lan_netmask,lan1_ifname,lan1_ipaddr,lan1_netmask,lan2_ifname,lan2_ipaddr,lan2_netmask,lan3_ifname,lan3_ipaddr,lan3_netmask,wg_adns,wg0_enable,wg0_file,wg0_ip,wg0_fwmark,wg0_mtu,wg0_preup,wg0_postup,wg0_predown,wg0_postdown,wg0_aip,wg0_dns,wg0_peer_dns,wg0_ka,wg0_port,wg0_key,wg0_endpoint,wg0_com,wg0_lan,wg0_rgw,wg0_peers,wg0_route,wg1_enable,wg1_file,wg1_ip,wg1_fwmark,wg1_mtu,wg1_preup,wg1_postup,wg1_predown,wg1_postdown,wg1_aip,wg1_dns,wg1_peer_dns,wg1_ka,wg1_port,wg1_key,wg1_endpoint,wg1_com,wg1_lan,wg1_rgw,wg1_peers,wg1_route,wg2_enable,wg2_file,wg2_ip,wg2_fwmark,wg2_mtu,wg2_preup,wg2_postup,wg2_predown,wg2_postdown,wg2_aip,wg2_dns,wg2_peer_dns,wg2_ka,wg2_port,wg2_key,wg2_endpoint,wg2_com,wg2_lan,wg2_rgw,wg2_peers,wg2_route"); %>
+//	<% nvram("wan_ipaddr,wan_hostname,wan_domain,lan_ifname,lan_ipaddr,lan_netmask,wg_adns,wg0_enable,wg0_poll,wg0_file,wg0_ip,wg0_fwmark,wg0_mtu,wg0_preup,wg0_postup,wg0_predown,wg0_postdown,wg0_aip,wg0_dns,wg0_peer_dns,wg0_ka,wg0_port,wg0_key,wg0_endpoint,wg0_com,wg0_lan,wg0_rgw,wg0_peers,wg0_route,wg0_firewall,wg0_nat,wg0_fw,wg0_rgwr,wg0_routing_val,wg0_prio,wg1_enable,wg1_poll,wg1_file,wg1_ip,wg1_fwmark,wg1_mtu,wg1_preup,wg1_postup,wg1_predown,wg1_postdown,wg1_aip,wg1_dns,wg1_peer_dns,wg1_ka,wg1_port,wg1_key,wg1_endpoint,wg1_com,wg1_lan,wg1_rgw,wg1_peers,wg1_route,wg1_firewall,wg1_nat,wg1_fw,wg1_rgwr,wg1_routing_val,wg1_prio,wg2_enable,wg2_poll,wg2_file,wg2_ip,wg2_fwmark,wg2_mtu,wg2_preup,wg2_postup,wg2_predown,wg2_postdown,wg2_aip,wg2_dns,wg2_peer_dns,wg2_ka,wg2_port,wg2_key,wg2_endpoint,wg2_com,wg2_lan,wg2_rgw,wg2_peers,wg2_route,wg2_firewall,wg2_nat,wg2_fw,wg2_rgwr,wg2_routing_val,wg2_prio"); %>
 
 
 var cprefix = 'vpn_wireguard';
-var changed = 0;
+var changed = 0, i;
 var serviceType = 'wireguard';
+for (i = 0; i < WG_INTERFACE_COUNT; i++) serviceLastUp.push('0');
+
+function RouteGrid() {return this;}
+RouteGrid.prototype = new TomatoGrid;
 
 var tabs =  [];
 for (i = 0; i < WG_INTERFACE_COUNT; ++i)
-	tabs.push(['wg'+i,'wg'+i]);
-var sections = [['wg-config','Config'],['wg-peers','Peers'],['wg-scripts','Scripts'],['wg-status','Status']];
+	tabs.push(['wg'+i,'<span id="'+serviceType+i+'_tabicon" style="font-size:9px">▽ <\/span><span class="tabname">wg'+i+'<\/span>']);
+var sections = [['wg-config','Config'],['wg-peersp','Peers Params'],['wg-peers','Peers'],['wg-scripts','Scripts'],['wg-policy','Routing Policy'],['wg-status','Status']];
+
+var routingTables = [];
+for (i = 0; i < tabs.length; ++i) routingTables.push(new RouteGrid());
 
 function update_nvram(fom) {
 	for (var i = 0; i < fom.length; ++i) {
@@ -88,6 +80,9 @@ ferror.show = function(e) {
 	var id = locateElement(e);
 	var tab = id.slice(0, 3);
 	var section = id.slice(4);
+	if (section == 'table_routing')
+		section = 'wg-policy'; /* special case */
+
 	tabSelect(tab);
 	sectSelect(tab.substr(2), section);
 	e.focus();
@@ -109,6 +104,8 @@ function show() {
 		var e = E('_'+serviceType+i+'_button');
 		var d = isup[serviceType+i];
 
+		E('_'+serviceType+i+'_notice').innerHTML = (d ? '<span class="service_up"><span class="servup_image">▲ <\/span>Up<\/span>' : '<span class="service_down"><span class="servdn_image">▽ <\/span>Down<\/span>');
+		if (E(serviceType+i+'_tabicon')) E(serviceType+i+'_tabicon').innerHTML = (d ? '<span class="icon_up"><span class="servup_image">▲ <\/span><\/span>' : '<span class="icon_down"><span class="servdn_image">▽ <\/span><\/span>');
 		e.value = (d ? 'Stop' : 'Start')+' Now';
 		e.setAttribute('onclick', 'javascript:toggle(\''+serviceType+''+i+'\','+d+');');
 		if (serviceLastUp[i] != d || countButton > 6) {
@@ -122,11 +119,22 @@ function show() {
 	}
 }
 
-function toggle(service, isup) {
+function toggle(service, up) {
 	if (changed && !confirm('There are unsaved changes. Continue anyway?'))
 		return;
 
-	serviceLastUp[id] = isup;
+	/* check for active 'External - VPN Provider' + 'Redirect Internet traffic' set to 'All' */
+	var externalall_mode_active = 0;
+	for (var i = 0; i < WG_INTERFACE_COUNT; i++) {
+		if (isup['wireguard'+i] && E('_wg'+i+'_com').value == 3 && E('_wg'+i+'_rgwr').value == 1) /* active */
+			externalall_mode_active++;
+	}
+	if (externalall_mode_active && !up && E('_wg'+service.substr(9, 1)+'_com').value == 3 && E('_wg'+service.substr(9, 1)+'_rgwr').value == 1) {
+		alert('Only one wireguard instance can be run in "External - VPN Provider" mode with "Redirect Internet traffic" set to "All"!');
+		return;
+	}
+
+	serviceLastUp[id] = up;
 	countButton = 0;
 
 	var id = service.substr(service.length - 1);
@@ -135,7 +143,8 @@ function toggle(service, isup) {
 
 	var fom = E('t_fom');
 	var bup = fom._service.value;
-	fom._service.value = service+(isup ? '-stop' : '-start');
+	fom._service.value = service+(up ? '-stop' : '-start');
+	fom._nofootermsg.value = 1;
 
 	form.submit(fom, 1, 'service.cgi');
 	fom._service.value = bup;
@@ -149,12 +158,12 @@ function tabSelect(name) {
 	for (var i = 0; i < tabs.length; ++i) {
 		if (name == tabs[i][0]) {
 			elem.display(tabs[i][0]+'-wg-tab', true);
-			for (var j = 0; j < sections.length; ++j) {
-				elem.display('notes-'+sections[j][0], (E(tabs[i][0]+'-'+sections[j][0]+'-wg-tab').classList.contains('active')));
-			}
+			elem.display(tabs[i][0]+'-wg-status-button', true);
 		}
-		else
+		else {
 			elem.display(tabs[i][0]+'-wg-tab', false);
+			elem.display(tabs[i][0]+'-wg-status-button', false);
+		}
 	}
 
 	cookie.set(cprefix+'_tab', name);
@@ -167,22 +176,27 @@ function sectSelect(tab, section) {
 		if (section == sections[i][0]) {
 			elem.addClass(tabs[tab][0]+'-'+sections[i][0]+'-wg-tab', 'active');
 			elem.display(tabs[tab][0]+'-'+sections[i][0], true);
-			elem.display('notes-'+sections[i][0], true);
 		}
 		else {
 			elem.removeClass(tabs[tab][0]+'-'+sections[i][0]+'-wg-tab', 'active');
 			elem.display(tabs[tab][0]+'-'+sections[i][0], false);
-			elem.display('notes-'+sections[i][0], false);
 		}
 	}
 
 	cookie.set(cprefix+tab+'_section', section);
 }
 
-function updateForm(num) {
+function updateForm(num, fw) {
 	var fom = E('t_fom');
 
-	if (isup['wireguard'+num] && fom._service.value.indexOf('wg'+num) < 0) {
+	if (fw && fom._service.value.indexOf('firewall') < 0) {
+		if (fom._service.value != '')
+			fom._service.value += ',';
+
+		fom._service.value += 'firewall-restart';
+	}
+
+	if (isup['wireguard'+num] && fom._service.value.indexOf('wireguard'+num) < 0) {
 		if (fom._service.value != '')
 			fom._service.value += ',';
 
@@ -191,9 +205,14 @@ function updateForm(num) {
 }
 
 function loadConfig(unit) {
-	var [file] = E('wg'+unit+'_config_file').files;
+	if (isup['wireguard'+unit]) {
+		alert('Before importing the configuration file, you must first stop this instance');
+		return;
+	}
 
+	var [file] = E('wg'+unit+'_config_file').files;
 	var index = file.name.lastIndexOf('.');
+
 	if (file.name.slice(index).toLowerCase() != '.conf') {
 		alert('Only files that end in ".conf" are accepted for import');
 		return;
@@ -291,6 +310,7 @@ function mapConfigToFields(event) {
 function clearAllFields(unit) {
 	E('_wg'+unit+'_file').value = '';
 	E('_wg'+unit+'_port').value = '';
+	E('_wg'+unit+'_prio').value = '';
 	E('_wg'+unit+'_key').value = '';
 	E('_wg'+unit+'_pubkey').value = '';
 	E('_wg'+unit+'_ip').value = '';
@@ -343,6 +363,7 @@ function validateConfig(config) {
 
 function mapConfig(contents) {
 	var lines = contents.split('\n');
+	var unit = event.target.unit;
 	var config = {
 		'interface': {},
 		'peers': []
@@ -440,13 +461,22 @@ function mapConfig(contents) {
 				target.psk = value;
 				break;
 			case 'allowedips':
-				if (!target.allowed_ips)
-					target.allowed_ips = value;
+				if (!target.allowed_ips) {
+					var tmp = value.split(',');
+					for (var j = 0; j < tmp.length; ++j) {
+						if (tmp[j].indexOf(':')) /* we're not IPv6 ready yet */
+							tmp.splice(j, j);
+					}
+					target.allowed_ips = tmp.join(',');
+				}
 				else
 					target.allowed_ips = [target.allowed_ips, value].join(',');
 				break;
 			case 'endpoint':
-				target.endpoint = value.split(':')[0];;
+				if (E('_wg'+unit+'_com').value == 3) /* 'External - VPN Provider' */
+					target.endpoint = value;
+				else
+					target.endpoint = value.split(':')[0];
 				break;
 			case 'persistentkeepalive':
 				target.keepalive = value;
@@ -674,7 +704,7 @@ PeerGrid.prototype.edit = function(cell) {
 	if (interface_port == '')
 		interface_port = (51820 + this.unit);
 
-	E('_f_wg'+this.unit+'_peer_pubkey').disabled = true;
+	E('_f_wg'+this.unit+'_peer_pubkey').disabled = 1;
 
 	alias.value = data[0];
 	endpoint.value = data[1];
@@ -701,15 +731,12 @@ PeerGrid.prototype.edit = function(cell) {
 
 PeerGrid.prototype.insertData = function(at, data) {
 	if (at == -1)
-		at = this.tb.rows.length ;
+		at = this.tb.rows.length;
 
 	var view = this.dataToView(data);
-	var qr = '';
 	var cfg = '';
-	if (data[2] != '') {
-		qr = '<img src="qr-icon.svg" alt="" title="Display QR Code" height="16" onclick="genPeerGridConfigQR(event,'+this.unit+','+at+')">';
-		cfg = '<img src="cfg-icon.svg" alt="" title="Download Config File" height="16" onclick="genPeerGridConfigFile(event,'+this.unit+','+at+')">';
-	}
+	var qr = '<span class="qriconsvg" title="Display QR Code" onclick="genPeerGridConfigQR(event,'+this.unit+','+at+')">&nbsp;<\/span>';
+	if (data[2] != '') cfg = '<span class="cfgiconsvg" title="Download Config File" onclick="genPeerGridConfigFile(event,'+this.unit+','+at+',\'cfg\')">&nbsp;<\/span>';
 	view.unshift(qr, cfg);
 	view[5] = view[5].substring(0,8)+' ... '+view[5].slice(-8);
 
@@ -826,7 +853,7 @@ function encodePeers(data) {
 }
 
 function verifyPeerFields(unit, require_privkey) {
-	var result = 1;
+	var ok = 1;
 
 	var port = E('_f_wg'+unit+'_peer_port');
 	var privkey = E('_f_wg'+unit+'_peer_privkey');
@@ -837,36 +864,40 @@ function verifyPeerFields(unit, require_privkey) {
 	var fwmark = E('_f_wg'+unit+'_peer_fwmark');
 
 	if ((!port.value.match(/^ *[-\+]?\d+ *$/)) || (port.value < 1) || (port.value > 65535)) {
-		ferror.set(port, 'A valid port must be provided', !result);
-		result = 0;
+		ferror.set(port, 'A valid port must be provided', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(port);
 
 	if ((privkey.value || require_privkey) && !window.wireguard.validateBase64Key(privkey.value)) {
-		ferror.set(privkey, 'A valid private key must be provided', !result);
-		result = 0;
+		ferror.set(privkey, 'A valid private key must be provided', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(privkey);
 
 	if (pubkey.value && !window.wireguard.validateBase64Key(pubkey.value)) {
-		ferror.set(privkey, 'A valid public key must be provided', !result);
-		result = 0;
+		ferror.set(privkey, 'A valid public key must be provided', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(pubkey);
 
 	if (psk.value && !window.wireguard.validateBase64Key(psk.value)) {
-		ferror.set(psk, 'A valid PresharedKey must be provided or left blank', !result);
-		result = 0;
+		ferror.set(psk, 'A valid PresharedKey must be provided or left blank', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(psk);
 
-	if (!verifyCIDR(ip.value)) {
-		ferror.set(ip, 'A valid CIDR (IP/MASK) must be provided to generate a configuration file', !result);
-		result = 0;
+	if (E('_wg'+unit+'_com').value != 3) { /* !'External - VPN Provider' */
+		if (!verifyCIDR(ip.value)) {
+			ferror.set(ip, 'A valid CIDR (IP/MASK) must be provided to generate a configuration file', !ok);
+			ok = 0;
+		}
+		else
+			ferror.clear(ip);
 	}
 	else
 		ferror.clear(ip);
@@ -882,23 +913,23 @@ function verifyPeerFields(unit, require_privkey) {
 		}
 	}
 	if (!ok) {
-		ferror.set(allowedips, 'Allowed IPs must be in CIDR format separated by commas', !result);
-		result = 0;
+		ferror.set(allowedips, 'Allowed IPs must be in CIDR format separated by commas', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(allowedips);
 
 	/* verify peer keep alive */
-	if (!v_range('_f_wg'+unit+'_peer_ka', !result, 0, 99)) result = 0;
+	if (!v_range('_f_wg'+unit+'_peer_ka', !ok, 0, 99)) ok = 0;
 
 	if (fwmark.value && !verifyFWMark(fwmark.value)) {
-		ferror.set(fwmark, 'FWMark must be a hexadecimal number of 8 characters or 0', !result);
-		result = 0;
+		ferror.set(fwmark, 'FWMark must be a hexadecimal number of 8 characters or 0', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(fwmark);
 
-	return result;
+	return ok;
 }
 
 function copyInterfacePubKey(unit) {
@@ -933,7 +964,7 @@ function generateInterfaceKey(unit) {
 		var keys = window.wireguard.generateKeypair();
 		E('_wg'+unit+'_key').value = keys.privateKey;
 		E('_wg'+unit+'_pubkey').value = keys.publicKey;
-		updateForm(unit);
+		updateForm(unit, 0);
 		changed = 1;
 	}
 }
@@ -971,19 +1002,31 @@ function clearPeerFields(unit) {
 	E('_f_wg'+unit+'_peer_ep').value = '';
 	E('_f_wg'+unit+'_peer_port').value = port;
 	E('_f_wg'+unit+'_peer_privkey').value = '';
-	E('_f_wg'+unit+'_peer_privkey').disabled = false;
+	E('_f_wg'+unit+'_peer_privkey').disabled = 0;
 	E('_f_wg'+unit+'_peer_pubkey').value = '';
-	E('_f_wg'+unit+'_peer_pubkey').disabled = false;
+	E('_f_wg'+unit+'_peer_pubkey').disabled = 0;
 	E('_f_wg'+unit+'_peer_psk').value = '';
 	E('_f_wg'+unit+'_peer_ip').value = '';
 	E('_f_wg'+unit+'_peer_aip').value = '';
 	E('_f_wg'+unit+'_peer_ka').value = '';
 	E('_f_wg'+unit+'_peer_fwmark').value = '';
+
+	var button = E('wg'+unit+'_peer_add');
+	button.value = 'Add to Peers';
+	button.setAttribute('onclick', 'addPeer('+unit+')');
 }
 
 function addPeer(unit, quiet) {
 	if (!verifyPeerFields(unit))
 		return;
+
+	if (E('_wg'+unit+'_com').value == 3) { /* 'External - VPN Provider' - allow only one peer (us) */
+		var rows = peerTables[unit].getAllData().length;
+		if (rows > 0) {
+			alert('In "External - VPN Provider" mode you can only add one peer (this router)')
+			return;
+		}
+	}
 
 	changed = 1;
 
@@ -992,7 +1035,7 @@ function addPeer(unit, quiet) {
 	peerTables[unit].disableNewEditor(true);
 
 	clearPeerFields(unit);
-	updateForm(unit);
+	updateForm(unit, 0);
 
 	var qrcode = E('wg'+unit+'_qrcode');
 	if (qrcode.style.display != 'none') {
@@ -1015,7 +1058,7 @@ function editPeer(unit, rowIndex, quiet) {
 	peerTables[unit].disableNewEditor(true);
 
 	clearPeerFields(unit);
-	updateForm(unit);
+	updateForm(unit, 0);
 
 	var button = E('wg'+unit+'_peer_add');
 	button.value = 'Add to Peers';
@@ -1095,9 +1138,9 @@ function generatePeer(unit) {
 
 	/* set fields with generated data */
 	E('_f_wg'+unit+'_peer_privkey').value = keys.privateKey;
-	E('_f_wg'+unit+'_peer_privkey').disabled = false;
+	E('_f_wg'+unit+'_peer_privkey').disabled = 0;
 	E('_f_wg'+unit+'_peer_pubkey').value = keys.publicKey;
-	E('_f_wg'+unit+'_peer_pubkey').disabled = true;
+	E('_f_wg'+unit+'_peer_pubkey').disabled = 1;
 	E('_f_wg'+unit+'_peer_psk').value = psk;
 	E('_f_wg'+unit+'_peer_ip').value = ip+'/'+netmask;
 	E('_f_wg'+unit+'_peer_ka').value = 0;
@@ -1137,13 +1180,13 @@ function genPeerGridConfigQR(event, unit, row) {
 	event.stopPropagation();
 }
 
-function genPeerGridConfigFile(event, unit, row) {
+function genPeerGridConfigFile(event, unit, row, type) {
 	if (changed) {
 		alert('Changes have been made. You need to save before continue!');
 		return;
 	}
 
-	var content = genPeerGridConfig(unit, row);
+	var content = genPeerGridConfig(unit, row, type);
 	if (content != false) {
 		var filename = 'peer'+row+'.conf';
 		var alias = peerTables[unit].tb.rows[row]._data[0];
@@ -1154,35 +1197,35 @@ function genPeerGridConfigFile(event, unit, row) {
 	event.stopPropagation();
 }
 
-function genPeerGridConfig(unit, row) {
+function genPeerGridConfig(unit, row, type) {
 	var port = E('_f_wg'+unit+'_peer_port');
 	var fwmark = E('_f_wg'+unit+'_peer_fwmark');
 	var row_data = peerTables[unit].tb.rows[row]._data;
-	var result = true;
+	var ok = 1;
 
 	clearPeerFields(unit);
 
-	if (!row_data[2]) {
+	if (type == 'cfg' && !row_data[2]) {
 		alert('The selected peer does not have a private key stored, which is require for configuration generation');
-		result = false;
+		ok = 0;
 	}
 
 	if ((!port.value.match(/^ *[-\+]?\d+ *$/)) || (port.value < 1) || (port.value > 65535)) {
-		ferror.set(port, 'A valid port must be provided', !result);
-		result = false;
+		ferror.set(port, 'A valid port must be provided', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(port);
 
 	if (fwmark.value && !verifyFWMark(fwmark.value)) {
-		ferror.set(fwmark, 'FWMark must be a hexadecimal number of 8 characters or 0', !result);
-		result = false;
+		ferror.set(fwmark, 'FWMark must be a hexadecimal number of 8 characters or 0', !ok);
+		ok = 0;
 	}
 	else
 		ferror.clear(fwmark);
 
-	if (!result)
-		return false;
+	if (!ok)
+		return 0;
 
 	return generateWGConfig(unit, row_data[0], row_data[2], row_data[4], row_data[5].split('/')[0], port.value, fwmark.value, row_data[7], row_data[1]);
 }
@@ -1492,7 +1535,7 @@ function spin(x, which) {
 }
 
 function displayStatus(unit, text) {
-	elem.setInnerHTML(E('wg'+unit+'_result'), '<tt>'+escapeText(text)+'<\/tt>');
+	elem.setInnerHTML(E('wg'+unit+'_result'), escapeText(text));
 	spin(0, 'wg'+unit+'_status_wait');
 }
 
@@ -1529,6 +1572,78 @@ function mayClose(event) {
 	}
 }
 
+RouteGrid.prototype.fieldValuesToData = function(row) {
+	var f = fields.getAll(row);
+
+	return [(f[0].checked ? 1 : 0), f[1].value, f[2].value,f[3].checked?1:0];
+}
+
+RouteGrid.prototype.dataToView = function(data) {
+	var temp = ['<input type="checkbox" disabled'+(data[0] != 0 ? ' checked' : '')+'>',['From Source IP','To Destination IP','To Domain'][data[1] - 1],data[2],'<input type="checkbox" disabled'+(data[3] != 0 ? ' checked' : '')+'>'];
+	var v = [];
+	for (var i = 0; i < temp.length; ++i)
+		v.push(((i == 0) || (i == 3)) ? temp[i] : escapeHTML(''+temp[i]));
+
+	return v;
+}
+
+RouteGrid.prototype.dataToFieldValues = function(data) {
+	return [data[0] == 1, data[1], data[2],data[3] == 1];
+}
+
+RouteGrid.prototype.rpDel = function(row) {
+	changed = 1;
+	row = PR(row);
+	TGO(row).moving = null;
+	row.parentNode.removeChild(row);
+	this.recolor();
+	this.rpHide();
+
+	for (var unit = 0; unit < tabs.length; ++unit) {
+		if (routingTables[unit] == this)
+			updateForm(unit, 1);
+	}
+}
+
+RouteGrid.prototype.verifyFields = function(row, quiet) {
+	changed = 1;
+	var ok = 1;
+
+	for (var unit = 0; unit < tabs.length; ++unit) {
+		if (routingTables[unit] == this)
+			updateForm(unit, 1);
+	}
+	var f = fields.getAll(row);
+
+	f[2].value = f[2].value.trim();
+	ferror.clear(f[2]);
+
+	/* Verify fields in this row of the table */
+	if (f[2].value == '') {
+		ferror.set(f[2], 'Value is mandatory', quiet || !ok);
+		ok = 0;
+	}
+	else if (f[2].value.indexOf('>') >= 0 || f[2].value.indexOf('<') >= 0) {
+		ferror.set(f[2], 'Value cannot contain "<" or ">" characters', quiet || !ok);
+		ok = 0;
+	}
+	else if (f[2].value.indexOf(' ') >= 0 || f[2].value.indexOf(',') >= 0 || f[2].value.indexOf('\t') >= 0 || f[2].value.indexOf(':') >= 0) {
+		ferror.set(f[2], 'Value cannot contain "space", "tab", ":" or "," characters. Only one IP or Domain per entry', quiet || !ok);
+		ok = 0;
+	}
+	else if (f[2].value.indexOf('-') >= 0 && f[1].value == 2) {
+		ferror.set(f[2], 'Value cannot contain "-" character. IP range is not supported', quiet || !ok);
+		ok = 0;
+	}
+	else
+		ferror.clear(f[2]);
+
+	if (f[1].value != 3 && (!v_iptaddr(f[2], quiet || !ok)))
+		ok = 0;
+
+	return ok;
+}
+
 function verifyCIDR(cidr) {
 	return cidr.match(/(([1-9]{0,1}[0-9]{0,2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]{0,1}[0-9]{0,2}|2[0-4][0-9]|25[0-5])\/[0-9]|([1-2][0-9]|3[0-2])/)
 }
@@ -1552,32 +1667,64 @@ function verifyFWMark(fwmark) {
 }
 
 function verifyFields(focused, quiet) {
-	var ok = 1;
+	var i, ok = 1;
+	tgHideIcons();
+	var externalall_mode_enabled = -1;
+	var restart = 1;
 
-	/* When settings change, make sure we restart the right services */
+	for (i = 0; i < WG_INTERFACE_COUNT; i++) {
+		if (focused && focused == E('_f_wg'+i+'_enable')) /* except on/off */
+			restart = 0;
+	}
+
+	/* When settings change, make sure we restart the right service */
 	if (focused) {
 		changed = 1;
 
 		var fom = E('t_fom');
-		var serveridx = focused.name.indexOf('wg');
-		if (serveridx >= 0) {
-			var num = focused.name.substring(serveridx + 2, serveridx + 3);
+		var unitidx = focused.name.indexOf('wg');
+		if (unitidx >= 0) {
+			var num = focused.name.substring(unitidx + 2, unitidx + 3);
 
-			updateForm(num);
+			/* check for active 'External - VPN Provider' + 'Redirect Internet traffic' set to 'All' + 'Enable On Start' in focused */
+			if (E('_wg'+num+'_com').value == 3 && E('_wg'+num+'_rgwr').value == 1 && E('_f_wg'+num+'_enable').checked) /* enabled */
+				externalall_mode_enabled = num;
 
-			if (focused.name.indexOf('_adns') >= 0 && fom._service.value.indexOf('dnsmasq') < 0) {
-				if (fom._service.value != '')
-					fom._service.value += ',';
+			if (restart) { /* restart, except on/off */
+				/* check if we need to restart firewall */
+				if ((nvram['wg'+num+'_com'] < 3 && E('_wg'+num+'_com').value == 3) || (nvram['wg'+num+'_com'] == 3 && E('_wg'+num+'_com').value < 3) ||
+				    ((nvram['wg'+num+'_rgwr'] == 1 && E('_wg'+num+'_rgwr').value > 1) || (nvram['wg'+num+'_rgwr'] > 1 && E('_wg'+num+'_rgwr').value == 1))
+				)
+					updateForm(num, 1);
+				else
+					updateForm(num, 0);
 
-				fom._service.value += 'dnsmasq-restart';
+				if (focused.name.indexOf('_adns') >= 0 && fom._service.value.indexOf('dnsmasq') < 0) {
+					if (fom._service.value != '')
+						fom._service.value += ',';
+
+					fom._service.value += 'dnsmasq-restart';
+				}
 			}
 		}
 	}
 
-	for (var i = 0; i < WG_INTERFACE_COUNT; i++) {
+	for (i = 0; i < WG_INTERFACE_COUNT; i++) {
+		/* check for active 'External - VPN Provider' + 'Redirect Internet traffic' set to 'All' + 'Enable On Start' */
+		if (E('_wg'+i+'_com').value == 3 && E('_wg'+i+'_rgwr').value == 1 && E('_f_wg'+i+'_enable').checked) { /* enabled */
+			if (externalall_mode_enabled != -1 && externalall_mode_enabled != i) {
+				alert('Only one wireguard instance can be run on router start ("Enable on Start" option) in "External - VPN Provider" mode with "Redirect Internet traffic" set to "All"!');
+				E('_f_wg'+externalall_mode_enabled+'_enable').checked = 0;
+				return;
+			}
+		}
+
+		if (!v_range('_wg'+i+'_poll', quiet || !ok, 0, 30))
+			ok = 0;
+
 		/* verify valid port */
 		var port = E('_wg'+i+'_port');
-		if (port.value != '' && (!port.value.match(/^ *[-\+]?\d+ *$/) || (port.value < 1) || (port.value > 65535))) {
+		if (port.value != '' && !v_port('_wg'+i+'_port', quiet || !ok)) {
 			ferror.set(port, 'The interface port must be a valid port', quiet || !ok);
 			ok = 0;
 		}
@@ -1588,6 +1735,15 @@ function verifyFields(focused, quiet) {
 			else
 				E('_f_wg'+i+'_peer_port').value = port.value;
 		}
+
+		/* verify priority */
+		var priority = E('_wg'+i+'_prio');
+		if (priority.value != '' && !v_range('_wg'+i+'_prio', quiet || !ok, 1, 32766)) {
+			ferror.set(priority, 'The priority must be in the range 1 - 32766', quiet || !ok);
+			ok = 0;
+		}
+		else
+			ferror.clear(priority);
 
 		/* disable lan checkbox if lan is not in use */
 		for (var j = 0; j <= MAX_BRIDGE_ID; ++j) {
@@ -1642,6 +1798,28 @@ function verifyFields(focused, quiet) {
 			else
 				ferror.clear(ip);
 		}
+
+		var fw = E('_wg'+i+'_firewall').value;
+		var nat = E('_f_wg'+i+'_nat').checked;
+		var ext = E('_wg'+i+'_com').value == 3; /* 'External - VPN Provider' */
+		var rgwr = (E('_wg'+i+'_rgwr').value == 2 || E('_wg'+i+'_rgwr').value == 3);
+		if (ext) E('_f_wg'+i+'_peer_ip').value = '';
+		if (ext) E('_f_wg'+i+'_route').value = '1';
+		E('_f_wg'+i+'_peer_ip').disabled = ext;
+		elem.display('wg'+i+'-peers-download', !ext);
+		elem.display('wg'+i+'-peers-generate-title', !ext);
+		elem.display('wg'+i+'-peers-generate', !ext);
+		elem.display(PR('_wg'+i+'_firewall'), ext);
+		elem.display(PR('_f_wg'+i+'_route'), !ext);
+		elem.display(PR('_f_wg'+i+'_nat'), fw != 'custom' && ext);
+		elem.display(PR('_f_wg'+i+'_fw'), fw != 'custom' && ext);
+		elem.display(PR('_wg'+i+'_rgwr'), ext);
+		elem.display(E('wg'+i+'_nat_warn_text'), ext && !nat);
+		elem.display(PR('_wg'+i+'_prio'), ext && rgwr);
+
+		/* Page Routing Policy */
+		elem.display(E('wg'+i+'_table_routing'), ext && rgwr);
+		elem.display(E('_wg'+i+'_routing_div_help'), (!ext) || (ext && !rgwr));
 
 		/* verify interface dns */
 		var dns = E('_wg'+i+'_dns');
@@ -1757,6 +1935,9 @@ function save(nomsg) {
 	E('wg_adns').value = '';
 	var fom = E('t_fom');
 	for (var i = 0; i < WG_INTERFACE_COUNT; i++) {
+		if (routingTables[i].isEditing())
+			return;
+
 		var privkey = E('_wg'+i+'_key').value;
 		nvram['wg'+i+'_key'] = privkey;
 
@@ -1768,8 +1949,16 @@ function save(nomsg) {
 		fom['wg'+i+'_peers'].value = s;
 		nvram['wg'+i+'_peers'] = s;
 
+		var routedata = routingTables[i].getAllData();
+		s = '';
+		for (j = 0; j < routedata.length; ++j)
+			s += routedata[j].join('<')+'>';
+
+		fom['wg'+i+'_routing_val'].value = s;
 		fom['wg'+i+'_enable'].value = fom['_f_wg'+i+'_enable'].checked ? 1 : 0;
 		fom['wg'+i+'_rgw'].value = fom['_f_wg'+i+'_rgw'].checked ? 1 : 0;
+		fom['wg'+i+'_nat'].value = fom['_f_wg'+i+'_nat'].checked ? 1 : 0;
+		fom['wg'+i+'_fw'].value = fom['_f_wg'+i+'_fw'].checked ? 1 : 0;
 
 		/* set properly value of Push LANX to peers: bit 0 = LAN0, bit 1 = LAN1, bit 2 = LAN2, bit 3 = LAN3 */
 		fom['wg'+i+'_lan'].value = 0; /* init with 0 and check */
@@ -1810,6 +1999,7 @@ function save(nomsg) {
 			displayQRCode(content, i, row);
 		}
 	}
+	fom._nofootermsg.value = 0;
 
 	form.submit(fom, 1);
 
@@ -1822,16 +2012,33 @@ function earlyInit() {
 	var tab = cookie.get(cprefix+'_tab') || tabs[0][0];
 	for (var i = 0; i < tabs.length; ++i) {
 		sectSelect(i, cookie.get(cprefix+i+'_section') || sections[0][0]);
+
+		var t = tabs[i][0];
+
+		routingTables[i].init(t+'_table_routing','sort', 0,[ { type: 'checkbox', prefix: '<div class="centered">', suffix: '<\/div>' },
+		                                                        { type: 'select', options: [[1,'From Source IP'],[2,'To Destination IP'],[3,'To Domain']] },
+		                                                        { type: 'text', maxlen: 50 },
+		                                                        { type: 'checkbox', prefix: '<div class="centered">', suffix: '<\/div>' }]);
+		routingTables[i].headerSet(['Enable','Type','Value','Kill Switch']);
+		var routingVal = nvram[t+'_routing_val'];
+		if (routingVal.length) {
+			var s = routingVal.split('>');
+			for (var j = 0; j < s.length; ++j) {
+				if (!s[j].length)
+					continue;
+
+				var row = s[j].split('<');
+				routingTables[i].insertData(-1, row);
+			}
+		}
+		routingTables[i].showNewEditor();
+		routingTables[i].resetNewEditor();
 	}
 	tabSelect(tab);
 	verifyFields(null, 1);
 }
 
 function init() {
-	var c;
-	if (((c = cookie.get(cprefix+'_notes_vis')) != null) && (c == '1'))
-		toggleVisibility(cprefix, 'notes');
-
 	eventHandler();
 	addEvent(window, 'beforeunload', mayClose);
 
@@ -1854,11 +2061,30 @@ function init() {
 <!-- / / / -->
 
 <input type="hidden" name="_service" value="">
+<input type="hidden" name="_nofootermsg">
 <input type="hidden" name="wg_adns" id="wg_adns">
 
 <!-- / / / -->
 
-<div class="section-title">Wireguard Configuration</div>
+<div class="section-title">Status</div>
+<div class="section">
+	<div class="fields">
+		<script>
+			for (i = 0; i < tabs.length; ++i) {
+				t = tabs[i][0];
+
+				W('<div id="'+t+'-wg-status-button">');
+				W('<span id="_wireguard'+i+'_notice"><\/span>');
+				W('<input type="button" id="_wireguard'+i+'_button">&nbsp; <img src="spin.svg" alt="" id="spin'+i+'">');
+				W('<\/div>');
+			}
+		</script>
+	</div>
+</div>
+
+<!-- / / / -->
+
+<div class="section-title"><span class="wireguardsvg">&nbsp;</span>Wireguard Configuration</div>
 <div class="section">
 	<script>
 		tabCreate.apply(this, tabs);
@@ -1872,6 +2098,9 @@ function init() {
 			W('<input type="hidden" name="'+t+'_endpoint">');
 			W('<input type="hidden" name="'+t+'_peers">');
 			W('<input type="hidden" name="'+t+'_route">');
+			W('<input type="hidden" name="'+t+'_nat">');
+			W('<input type="hidden" name="'+t+'_fw">');
+			W('<input type="hidden" name="'+t+'_routing_val">');
 
 			W('<ul class="tabs">');
 			for (j = 0; j < sections.length; j++) {
@@ -1884,6 +2113,7 @@ function init() {
 			W('<div class="section-title">Interface<\/div>');
 			createFieldTable('', [
 				{ title: 'Enable on Start', name: 'f_'+t+'_enable', type: 'checkbox', value: nvram[t+'_enable'] == 1 },
+				{ title: 'Poll Interval', name: t+'_poll', type: 'text', maxlen: 2, size: 5, value: nvram[t+'_poll'], suffix: ' <small>minutes; 0 to disable<\/small>' },
 				{ title: 'Config file', name: t+'_file', type: 'text', placeholder: 'optional', maxlen: 64, size: 64, value: nvram[t+'_file'] },
 				{ title: 'Port', name: t+'_port', type: 'text', maxlen: 5, size: 10, placeholder: (51820+i), value: nvram[t+'_port'] },
 				{ title: 'Private Key', multi: [
@@ -1899,13 +2129,25 @@ function init() {
 				{ title: 'FWMark', name: t+'_fwmark', type: 'text', maxlen: 8, size: 8, value: nvram[t+'_fwmark'] },
 				{ title: 'MTU', name: t+'_mtu', type: 'text', maxlen: 4, size: 4, value: nvram[t+'_mtu'] },
 				{ title: 'Respond to DNS', name: 'f_'+t+'_adns', type: 'checkbox', suffix: '&nbsp;<small>enables dnsmasq to resolve queries arriving on this interface<\/small>', value: nvram.wg_adns.indexOf(''+i) >= 0 },
-				{ title: 'Routing Mode', name: 'f_'+t+'_route', type: 'select', options: [['0','Off'],['1','Auto'],['2','Custom Table']], value: nvram[t+'_route'][0] || 1, suffix: '&nbsp;<input type="text" name="f_'+t+'_custom_table" value="'+(nvram[t+'_route'].split('|', 2)[1] || '')+'" onchange="verifyFields(this, 1)" id="_f_'+t+'_custom_table" maxlength="32" size="32">' }
+				{ title: 'Routing Mode', name: 'f_'+t+'_route', type: 'select', options: [['0','Off'],['1','Auto'],['2','Custom Table']], value: nvram[t+'_route'][0] || 1, suffix: '&nbsp;<input type="text" name="f_'+t+'_custom_table" value="'+(nvram[t+'_route'].split('|', 2)[1] || '')+'" onchange="verifyFields(this, 1)" id="_f_'+t+'_custom_table" maxlength="32" size="32">' },
+				{ title: 'Firewall', name: t+'_firewall', type: 'select', options: [['auto','Automatic'],['custom','Custom']], value: nvram[t+'_firewall'] },
+				{ title: 'Create NAT on tunnel', indent: 2, name: 'f_'+t+'_nat', type: 'checkbox', value: nvram[t+'_nat'] != 0, suffix: ' <small id="'+t+'_nat_warn_text">routes must be configured manually<\/small>' },
+				{ title: 'Inbound Firewall', indent: 2, name: 'f_'+t+'_fw', type: 'checkbox', value: nvram[t+'_fw'] != 0 },
+				null,
+				{ title: 'Type of VPN', name: t+'_com', type: 'select', options: [['0','Internal - Hub (this device) and Spoke (peers)'],['1','Internal - Full Mesh (defined Endpoint only)'],['2','Internal - Full Mesh'],['3','External - VPN Provider']], value: nvram[t+'_com'] || 0 },
+				{ title: 'Redirect Internet traffic', name: t+'_rgwr', type: 'select', options: [[1,'All'],[2,'Routing Policy'],[3,'Routing Policy (strict)']], value: nvram[t+'_rgwr'] },
+				{ title: 'Priority', indent: 2, name: t+'_prio', type: 'text', maxlen: 5, size: 5, placeholder: (100 + i), suffix: '&nbsp;<small>(1 - 32766) lower number = higher priority<\/small>', value: nvram[t+'_prio'] },
+				{ title: 'Import Config from File', indent: 2, custom: '<input type="file" class="import-file" id="'+t+'_config_file" accept=".conf" name="Browse File"><input type="button" id="'+t+'_config_import" value="Import" onclick="loadConfig('+i+')">' },
+				{ title: '', custom: '<div>Note: before importing the configuration, set the correct "Type of VPN" above.<\/div>' }
 			]);
-			W('<br>');
+			W('<br><\/div>');
+			/* config tab stop */
 
-			W('<div class="section-title">Peer Parameters<\/div>');
+			/* peers params tab start */
+			W('<div id="'+t+'-wg-peersp">');
+			W('<div class="section-title">Peers Parameters <span style="font-size:0.7em">(used only to generate peer config files)<\/span><\/div>');
 			createFieldTable('', [
-				{ title: 'Router behind NAT', name: t+'_ka', type: 'text', maxlen: 2, size: 4, suffix: '&nbsp;<small>enables keepalives from this router towards the defined peers (range 0 - 99 secs; 0 to disable)<\/small>', value: nvram[t+'_ka'] },
+				{ title: 'Router behind NAT', name: t+'_ka', type: 'text', maxlen: 2, size: 4, suffix: '&nbsp;<small>configures keepalive interval from this router towards the defined peers (0=disable/no NAT, 10-99s range, 25 is a common setting)<\/small>', value: nvram[t+'_ka'] },
 				{ title: 'Endpoint', name: 'f_'+t+'_endpoint', type: 'select', options: [['0','FQDN'],['1','WAN IP'],['2','Custom Endpoint']], value: nvram[t+'_endpoint'][0] || 0, suffix: '&nbsp;<input type="text" name="f_'+t+'_custom_endpoint" value="'+(nvram[t+'_endpoint'].split('|', 2)[1] || '')+'" onchange="verifyFields(this, 1)" id="_f_'+t+'_custom_endpoint" maxlength="64" size="46">' },
 				{ title: 'Allowed IPs', name: t+'_aip', type: 'text', placeholder: 'CIDR format / comma separated', maxlen: 128, size: 64, value: nvram[t+'_aip'] },
 				{ title: 'DNS Servers for Peers', name: t+'_peer_dns', type: 'text', maxlen: 128, size: 64, placeholder: 'comma separated', value: nvram[t+'_peer_dns'] },
@@ -1913,46 +2155,39 @@ function init() {
 				{ title: 'Push LAN1 (br1) to peers', name: 'f_'+t+'_lan1', type: 'checkbox', value: (nvram[t+'_lan'] & 0x02) },
 				{ title: 'Push LAN2 (br2) to peers', name: 'f_'+t+'_lan2', type: 'checkbox', value: (nvram[t+'_lan'] & 0x04) },
 				{ title: 'Push LAN3 (br3) to peers', name: 'f_'+t+'_lan3', type: 'checkbox', value: (nvram[t+'_lan'] & 0x08) },
-				{ title: 'Forward all peer traffic', name: 'f_'+t+'_rgw', type: 'checkbox', value: nvram[t+'_rgw'] == 1 },
-				{ title: 'Type of VPN', name: t+'_com', type: 'select', options: [['0','Internal - Hub (this device) and Spoke (peers)'],['1','Internal - Full Mesh (defined Endpoint only)'],['2','Internal - Full Mesh'],['3','External - VPN Provider']], value: nvram[t+'_com'] || 0 }
+				{ title: 'Forward all peer traffic', name: 'f_'+t+'_rgw', type: 'checkbox', value: nvram[t+'_rgw'] == 1 }
 			]);
-			W('<br>');
-
-			W('<div class="section-title">Import Config from File<\/div>');
-			W('<div>Before importing the configuration, set the correct "Type of VPN".<\/div>');
-			W('<div class="import-section">');
-			W('<input type="file" class="import-file" id="'+t+'_config_file" accept=".conf" name="Browse File">');
-			W('<input type="button" id="'+t+'_config_import" value="Import" onclick="loadConfig('+i+')" >');
-			W('<\/div>');
-			W('<br>');
-			W('<\/div>');
-			/* config tab stop */
+			W('<br><\/div>');
+			/* peers params tab stop */
 
 			/* peers tab start */
 			W('<div id="'+t+'-wg-peers">');
 			W('<div class="section-title">Peers<\/div>');
 			W('<div class="tomato-grid" id="'+t+'-peers-grid"><\/div>');
 			peerTables[i].setup();
+			W('<div id="'+t+'-peers-download">');
 			W('<input type="button" value="Download All Configs" onclick="downloadAllConfigs(event,'+i+')" id="'+t+'_download_all">');
 			W('<br>');
-			W('<br>');
+			W('<\/div>');
 			W('<div id="'+t+'_qrcode" class="qrcode" style="display:none">');
 			W('<img src="qr-icon.svg" alt="'+t+'_qrcode_img" style="max-width:100px">');
 			W('<div id="'+t+'_qrcode_labels" class="qrcode-labels" title="Message">Point your mobile phone camera <br>here above to connect automatically<\/div>');
 			W('<\/div>');
 
+			W('<div id="'+t+'-dummy" style="display:none">');
 			createFieldTable('', [
 				{ title: 'Port', name: 'f_'+t+'_peer_port', type: 'text', maxlen: 5, size: 10, value: nvram[t+'_port'] == '' ? (51820 + i) : nvram[t+'_port'], hidden: 1 },
 				{ title: 'FWMark', name: 'f_'+t+'_peer_fwmark', type: 'text', maxlen: 8, size: 8, value: '0', hidden: 1 }
 			]);
+			W('<\/div><br>');
 
-			W('<div class="section-title">Peer Generation<\/div>');
+			W('<div class="section-title" id="'+t+'-peers-generate-title">Peer Generation<\/div>');
+			W('<div id="'+t+'-peers-generate">');
 			createFieldTable('', [
 				{ title: 'Generate PSK', name: 'f_'+t+'_peer_psk_gen', type: 'checkbox', value: true, suffix: '&nbsp;<small>strenghten encyption with PresharedKey<\/small>' },
 				{ title: '', custom: '<input type="button" value="Generate Peer" onclick="generatePeer('+i+')" id="'+t+'_peer_gen">' }
 			]);
-			W('<br>');
-			W('<br>');
+			W('<br><\/div>');
 
 			W('<div class="section-title">Peer\'s Parameters<\/div>');
 			createFieldTable('', [
@@ -1963,8 +2198,8 @@ function init() {
 				{ title: 'Preshared Key', name: 'f_'+t+'_peer_psk', type: 'text', maxlen: 44, size: 48 },
 				{ title: 'VPN Interface IP', name: 'f_'+t+'_peer_ip', type: 'text', placeholder: 'CIDR format', maxlen: 64, size: 64 },
 				{ title: 'Allowed IPs', name: 'f_'+t+'_peer_aip', type: 'text', placeholder: 'CIDR format / comma separated', maxlen: 128, size: 64 },
-				{ title: 'Peer behind NAT', name: 'f_'+t+'_peer_ka', type: 'text', maxlen: 2, size: 4, value: '', suffix: '&nbsp;<small>enables keepalives from this peer towards the other peers (range 0 - 99 secs; 0 to disable)<\/small>' },
-				{ title: '', custom: '<input type="button" value="Add to Peers" onclick="addPeer('+i+')" id="'+t+'_peer_add">' }
+				{ title: 'Peer behind NAT', name: 'f_'+t+'_peer_ka', type: 'text', maxlen: 2, size: 4, value: '', suffix: '&nbsp;<small>configures keepalive interval for peer connections (0=disable/no NAT, 10-99s range, 25 is a common setting)<\/small>' },
+				{ title: '', custom: '<input type="button" value="Add to Peers" onclick="addPeer('+i+')" id="'+t+'_peer_add"> <input type="button" value="Clean" onclick="clearPeerFields('+i+')" id="'+t+'_peer_clean">' }
 			]);
 			W('<\/div>');
 			/* peers tab stop */
@@ -1981,21 +2216,33 @@ function init() {
 			W('<\/div>');
 			/* scripts tab stop */
 
+			/* routing policy tab start */
+			W('<div id="'+t+'-wg-policy">');
+			W('<div class="tomato-grid" id="'+t+'_table_routing"><\/div>');
+			W('<div id="_'+t+'_routing_div_help"><div class="fields"><div class="about"><b>To use Routing Policy, you must select "External - VPN Provider" in the "Type of VPN" drop-down list and "Routing Policy"/"Routing Policy (strict)" in the "Redirect Internet Traffic".<\/b><\/div><\/div><\/div>');
+			W('<div>');
+			W('<ul>');
+			W('<li><b>Type -> From Source IP<\/b> - Ex: "1.2.3.4", "1.2.3.4-2.3.4.5", "1.2.3.0/24".<\/li>');
+			W('<li><b>Type -> To Destination IP<\/b> - Ex: "1.2.3.4" or "1.2.3.0/24".<\/li>');
+			W('<li><b>Type -> To Domain<\/b> - Ex: "domain.com". Please enter one domain per line.<\/li>');
+			W('<li><b>IMPORTANT!<\/b> - Kill Switch: iptables rules (if \'KS\' for given entry is enabled) are always applied even if instance is down but in PBR mode (so-called strict Kill Switch).<\/li>');
+			W('<\/ul>');
+			W('<\/div>');
+			W('<\/div>');
+			/* routing policy tab stop */
+
 			/* status tab start */
 			W('<div id="'+t+'-wg-status">');
 			W('<pre id="'+t+'_result" class="status-result"><\/pre>');
 			W('<div style="text-align:right">');
-			W('<img src="spin.gif" id="'+t+'_status_refresh_spinner" alt=""> &nbsp;');
+			W('<img src="spin.svg" id="'+t+'_status_refresh_spinner" alt=""> &nbsp;');
 			genStdTimeList(t+'_status_refresh_time', 'One off', 0);
 			W('<input type="button" value="Refresh" onclick="toggleRefresh('+i+')" id="'+t+'_status_refresh_button"><\/div>');
-			W('<div style="display:none;padding-left:5px" id="'+t+'_status_wait"> Please wait... <img src="spin.gif" alt=""><\/div>');
+			W('<div style="display:none;padding-left:5px" id="'+t+'_status_wait"> Please wait... <img src="spin.svg" alt=""><\/div>');
 			statRefreshes[i].setup();
 			statRefreshes[i].initPage(3000, 0);
 			W('<\/div>');
 			/* status tab end */
-
-			/* start/stop button */
-			W('<div class="vpn-start-stop"><input type="button" value="" onclick="" id="_wireguard'+i+'_button">&nbsp; <img src="spin.gif" alt="" id="spin'+i+'"><\/div>');
 
 			W('<\/div>');
 		}
@@ -2004,128 +2251,13 @@ function init() {
 
 <!-- / / / -->
 
-<!-- start notes sections -->
-<div class="section-title">Notes <small><i><a href='javascript:toggleVisibility(cprefix,"notes");'><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
-<div class="section" id="sesdiv_notes" style="display:none">
-
-	<!-- config notes start -->
-	<div id="notes-wg-config" style="display:none">
-		<ul>
-			<li><b>Interface</b> - Settings directly related to the wireguard interface on this device.</li>
-			<ul>
-				<li><b>Enable on Start</b> - Enabling this will start the wireguard device when the router starts up.</li>
-				<li><b>Config file</b> - File path to wg-quick compatible configuration file. If this is specified all other settings will be ignored.</li>
-				<li><b>Port</b> - Port to use for the wireguard interface.</li>
-				<li><b>Private Key</b> - Private key to use for the wireguard interface. Can be generated by pressing the <b>Generate</b> button.</li>
-				<li><b>Public Key</b> - Public key calculated from the Private Key field. This is not user editable and only provided as a convenience.</li>
-				<li><b>VPN Interface IP</b> - IP and Netmask to use for the wireguard interface. Must be in CIDR format.</li>
-				<li><b>DNS Servers</b> - Comma separated list of DNS servers to use for the wireguard interface.</li>
-				<li><b>FWMark</b> - The value of the FWMark to use for routing. If left as 0, it will the default value.</li>
-				<li><b>MTU</b> - The maximum transmission unit for the wireguard interface.</li>
-				<li><b>Respond to DNS</b> - If checked, this interface will respond to DNS requests using the router's dnsmasq service. This is usually wanted for a site-to-site scenario.</li>
-				<li><b>Routing Mode</b> - The routing mode to use when setting up the wireguard interface</li>
-				<ul>
-					<li><b>Off</b> - Will not add routing rules for the wireguard interface.</li>
-					<li><b>Auto</b> - The wireguard interface will be routed using the default table (the same number as the interface port)</li>
-					<li><b>Custom Table</b> - Will route the wireguard interface using a custom table number. If specified, you must also include the table number in the additional field.</li>
-				</ul>
-			</ul>
-		</ul>
-		<ul>
-			<li><b>Peer Parameters</b> - Settings related to peer configuration generation on the Peers page.</li>
-			<ul>
-				<li><b>Router behind NAT</b> - If enabled, Keepalives will be sent from the router to peers.</li>
-				<li><b>Endpoint</b> - What to use for the endpoint of the router in configuration files generated on the Peers tab.</li>
-				<ul>
-					<li><b>FQDN</b> - Will use the hostname and domain name set up on the Identification page.</li>
-					<li><b>WAN IP</b> - Will use the WAN IP address of the router.</li>
-					<li><b>Custom Endpoint</b> - Will use a user specified endpoint. If selected, you must also include the custom endpoint in the addition field.</li>
-				</ul>
-				<li><b>Allowed IPs</b> - A list of additional CIDRs to attach to the router peer for configuration files generated on the peers tab.</li>
-				<li><b>DNS Servers for Peers</b> - DNS Servers to use in the Interface section of configuration files generated on the peers tab.</li>
-				<li><b>Push LAN0 (br0) to peers</b> - Allows the peers access to LAN0</li>
-				<li><b>Push LAN1 (br1) to peers</b> - Allows the peers access to LAN1</li>
-				<li><b>Push LAN2 (br2) to peers</b> - Allows the peers access to LAN2</li>
-				<li><b>Push LAN3 (br3) to peers</b> - Allows the peers access to LAN3</li>
-				<li><b>Forward all peer traffic</b> - Ensure all traffic from the peer is tunneled through the router's wireguard interface by adding an Allowed IP of 0.0.0.0/0</li>
-			</ul>
-		</ul>
-		<ul>
-			<li><b>Import Config from File</b> - This section can be used to parse fields from a wg-quick compatible configuration file and automatically populate the relevant fields. Using this will wipe your existing settings.</li>
-		</ul>
-	</div>
-	<!-- config notes stop -->
-
-	<!-- peers notes start -->
-	<div id="notes-wg-peers" style="display:none">
-		<ul>
-			<li><b>VPN Connectivity</b></li>
-			<ul>
-				<li><b>Type of VPN</b> - This field defines how peers interact.</li>
-				<ul>
-					<li><b>Internal - Hub (this device) and Spoke (peers)</b> - Peers will only communicate with the router, and not each other. Implies /32 netmask for the peers</li>
-					<li><b>Internal - Full Mesh (defined Endpoint only)</b> - Peers will communicate to any peer with an endpoint. Implies /24 netmask for the peers. Peers with endpoints will communicate with all peers.</li>
-					<li><b>Internal - Full Mesh</b> - All peers are added to each other's configuration regardless of the endpoint field being congigured or not. Implies /24 netmask for the peers.</li>
-					<li><b>External - VPN Provider</b> - This VPN Access the Internet via a 3rd party VPN provider (not yet implemented).</li>
-				</ul>
-			</ul>
-			<li><b>Peers Grid</b> - Each row represents a peer in the network. Peers are added through the Peer's Parameters subsection. Peers can also be edited by clicking on the row. The columns represent the following:</li>
-			<ul>
-				<li><b>QR</b> - Click the button to generate and display a QR code of this peer's configuration. Click again to hide it.</li>
-				<li><b>Cfg</b> - Click the button to generate and download this peer's configuration file.</li>
-				<li><b>Alias</b> - A custom name for this peer.</li>
-				<li><b>Endpoint</b> - Endpoint of this peer's wireguard interface.</li>
-				<li><b>Public Key</b> - The public key for this peer's wireguard interface.</li>
-				<li><b>VPN Interface IP</b> - The IP address of this peer's wireguard interface.</li>
-			</ul>
-			<li><b>Download All Configs</b> - This button will generate and download the configuration files for all the peers in the table.</li>
-		</ul>
-		<ul>
-			<li><b>Peer Generation</b></li>
-			<ul>
-				<li><b>Generate PSK</b> - If checked, will generate a PresharedKey for this network and assign the very same to each peer when <i>Generate Peer</i> is clicked.</li>
-				<li><b>Generate Peer</b> - This button will generate a new peer and populate the basic fields of the Peer's Parameters subsection.</li>
-			</ul>
-		</ul>
-		<ul>
-			<li><b>Peer's Parameters</b> - A subsection for adding and editing peers.</li>
-			<ul>
-				<li><b>Alias</b> - A custom name for this peer.</li>
-				<li><b>Endpoint</b> - Endpoint of this peer's wireguard interface.</li>
-				<li><b>Private Key</b> - The private key of this peer. Either this or the public key must be specified.</li>
-				<li><b>Public Key</b> - The public key of this peer. Either this or the public key must be specified.</li>
-				<li><b>Preshared Key</b> - The PSK to use for this peer.</li>
-				<li><b>VPN Interface IP</b> - The IP and Netmask to use for this peer. Must be in CIDR format.</li>
-				<li><b>Allowed IPs</b> - Additional Allowed IPs to use for this Peer. Must be in CIDR format. Can be a list of comma separated values.</li>
-				<li><b>Peer behind NAT</b> - If enabled, this peer will send Keepalives to all other peers.</li>
-				<li><b>Add/Save to Peers</b> - Click to add a peer or save changes to an edited peer.</li>
-			</ul>
-		</ul>
-	</div>
-	<!-- peers notes stop -->
-
-	<!-- scripts notes start -->
-	<div id="notes-wg-scripts" style="display:none">
-		<ul>
-			<li><b>Custom Interface Scripts</b> - Custom bash scripts to be run at defined events.</li>
-			<ul>
-				<li><b>Pre-Up Script</b> - Will be run before the interface is brought up.</li>
-				<li><b>Post-Up Script</b> - Will be run after the interface is brought up.</li>
-				<li><b>Pre-Down Script</b> - Will be run before the interface is brought down.</li>
-				<li><b>Post-Down Script</b> - Will be run after the interface is brought down.</li>
-				<li><b>Note:</b> "<i>%i</i>" will be replaced with the actual name of the wireguard interface.</li>
-			</ul>
-		</ul>
-	</div>
-	<!-- scripts notes stop -->
-
-	<!-- status notes start -->
-	<div id="notes-wg-status" style="display:none">
-	</div>
-	<!-- status notes stop -->
-
+<div class="section-title">Notes</div>
+<div class="section" id="sesdiv_notes">
+	<ul>
+		<li><b>Do not change (and save)</b> the settings when wireguard <b>is running</b> - you may end up with a downed firewall or broken routing table!</li>
+		<li>For help, click the link in the upper right corner to the dedicated wiki page.</li>
+	</ul>
 </div>
-<!-- end notes sections -->
 
 <!-- / / / -->
 

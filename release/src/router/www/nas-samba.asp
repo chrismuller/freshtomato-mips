@@ -13,13 +13,13 @@
 <title>[<% ident(); %>] NAS: File Sharing</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="isup.js?rel=<% version(); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 
 <script>
 
-//	<% nvram("smbd_enable,smbd_user,smbd_passwd,smbd_wgroup,smbd_cpage,smbd_ifnames,smbd_custom,smbd_master,smbd_wins,smbd_shares,smbd_autoshare,smbd_protocol,wan_wins,lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname"); %>
+//	<% nvram("smbd_enable,smbd_user,smbd_passwd,smbd_wgroup,smbd_cpage,smbd_ifnames,smbd_custom,smbd_master,smbd_wins,smbd_shares,smbd_autoshare,smbd_protocol,wan_wins,lan_ifname"); %>
 
 var cprefix = 'nas_samba';
 var changed = 0;
@@ -220,7 +220,7 @@ function earlyInit() {
 function init() {
 	var c;
 	if (((c = cookie.get(cprefix + '_notes_vis')) != null) && (c == '1')) {
-		toggleVisibility(cprefix, "notes");
+		toggleVisibility(cprefix, 'notes');
 	}
 	eventHandler();
 	up.initPage(250, 5);
@@ -255,9 +255,8 @@ function init() {
 <div class="section-title">Status</div>
 <div class="section">
 	<div class="fields">
-		<span id="_samba_notice"></span>
-		<input type="button" id="_samba_button" value="">
-		&nbsp; <img src="spin.gif" alt="" id="spin">
+		<span id="_samba_notice"></span><input type="button" id="_samba_button" value="">
+		&nbsp; <img src="spin.svg" alt="" id="spin">
 	</div>
 </div>
 
@@ -314,7 +313,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<li><b>LAN0, LAN1, LAN2, LAN3</b> - list of router interface names Samba will bind to.

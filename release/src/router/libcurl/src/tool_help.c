@@ -23,8 +23,6 @@
  ***************************************************************************/
 #include "tool_setup.h"
 
-#include "curlx.h"
-
 #include "tool_help.h"
 #include "tool_libinfo.h"
 #include "tool_util.h"
@@ -32,13 +30,10 @@
 #include "tool_cb_prg.h"
 #include "tool_hugehelp.h"
 #include "tool_getparam.h"
+#include "tool_cfgable.h"
 #include "terminal.h"
 
 #include "memdebug.h" /* keep this as LAST include */
-
-#ifndef ARRAYSIZE
-#define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
-#endif
 
 struct category_descriptors {
   const char *opt;
@@ -59,7 +54,7 @@ static const struct category_descriptors categories[] = {
   {"http", "HTTP and HTTPS protocol", CURLHELP_HTTP},
   {"imap", "IMAP protocol", CURLHELP_IMAP},
   {"ldap", "LDAP protocol", CURLHELP_LDAP},
-  {"output", "Filesystem output", CURLHELP_OUTPUT},
+  {"output", "File system output", CURLHELP_OUTPUT},
   {"pop3", "POP3 protocol", CURLHELP_POP3},
   {"post", "HTTP POST specific", CURLHELP_POST},
   {"proxy", "Options for proxies", CURLHELP_PROXY},
@@ -113,7 +108,7 @@ static void print_category(unsigned int category, unsigned int cols)
 static int get_category_content(const char *category, unsigned int cols)
 {
   unsigned int i;
-  for(i = 0; i < ARRAYSIZE(categories); ++i)
+  for(i = 0; i < CURL_ARRAYSIZE(categories); ++i)
     if(curl_strequal(categories[i].opt, category)) {
       printf("%s: %s\n", categories[i].opt, categories[i].desc);
       print_category(categories[i].category, cols);
@@ -126,7 +121,7 @@ static int get_category_content(const char *category, unsigned int cols)
 static void get_categories(void)
 {
   unsigned int i;
-  for(i = 0; i < ARRAYSIZE(categories); ++i)
+  for(i = 0; i < CURL_ARRAYSIZE(categories); ++i)
     printf(" %-11s %s\n", categories[i].opt, categories[i].desc);
 }
 
@@ -135,9 +130,9 @@ static void get_categories_list(unsigned int width)
 {
   unsigned int i;
   size_t col = 0;
-  for(i = 0; i < ARRAYSIZE(categories); ++i) {
+  for(i = 0; i < CURL_ARRAYSIZE(categories); ++i) {
     size_t len = strlen(categories[i].opt);
-    if(i == ARRAYSIZE(categories) - 1) {
+    if(i == CURL_ARRAYSIZE(categories) - 1) {
       /* final category */
       if(col + len + 1 < width)
         printf("%s.\n", categories[i].opt);
@@ -177,7 +172,7 @@ void inithelpscan(struct scan_ctx *ctx,
   memset(ctx->rbuf, 0, sizeof(ctx->rbuf));
 }
 
-bool helpscan(unsigned char *buf, size_t len, struct scan_ctx *ctx)
+bool helpscan(const unsigned char *buf, size_t len, struct scan_ctx *ctx)
 {
   size_t i;
   for(i = 0; i < len; i++) {
@@ -226,7 +221,7 @@ bool helpscan(unsigned char *buf, size_t len, struct scan_ctx *ctx)
 
 #endif
 
-void tool_help(char *category)
+void tool_help(const char *category)
 {
   unsigned int cols = get_terminal_columns();
   /* If no category was provided */
@@ -258,7 +253,7 @@ void tool_help(char *category)
     /* command line option help */
     const struct LongShort *a = NULL;
     if(category[1] == '-') {
-      char *lookup = &category[2];
+      const char *lookup = &category[2];
       bool noflagged = FALSE;
       if(!strncmp(lookup, "no-", 3)) {
         lookup += 3;
@@ -302,7 +297,6 @@ void tool_help(char *category)
     puts("Unknown category provided, here is a list of all categories:\n");
     get_categories();
   }
-  free(category);
 }
 
 static bool is_debug(void)

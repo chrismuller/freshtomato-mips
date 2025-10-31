@@ -20,7 +20,7 @@
 
 //	<% arplist(); %>
 
-//	<% nvram("dhcpd_static,lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname"); %>
+//	<% nvram("dhcpd_static,lan_ifname"); %>
 
 var lan_ifnames = [nvram.lan_ifname, nvram.lan1_ifname, nvram.lan2_ifname, nvram.lan3_ifname];
 var refresher = null;
@@ -179,7 +179,7 @@ function init() {
 <div class="section">
 	<div class="tomato-grid" id="wol-grid"></div>
 
-	<div><input type="button" value="Refresh" onclick="refreshClick()" id="refresh-button"> &nbsp; <img src="spin.gif" alt="" id="refresh-spinner"></div>
+	<div><input type="button" value="Refresh" onclick="refreshClick()" id="refresh-button"> &nbsp; <img src="spin.svg" alt="" id="refresh-spinner"></div>
 </div>
 
 <!-- / / / -->

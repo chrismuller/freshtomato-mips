@@ -27,12 +27,13 @@ from mesonbuild.mesonlib import (
 )
 
 if T.TYPE_CHECKING:
-    from ..coredata import MutableKeyedOptionDictType, KeyedOptionDictType
+    from ..options import MutableKeyedOptionDictType
     from ..dependencies import Dependency
     from ..envconfig import MachineInfo
     from ..environment import Environment
     from ..linkers.linkers import DynamicLinker
     from ..mesonlib import MachineChoice
+    from ..build import BuildTarget
 
 
 class FortranCompiler(CLikeCompiler, Compiler):
@@ -103,9 +104,9 @@ class FortranCompiler(CLikeCompiler, Compiler):
         return filename
 
     def find_library(self, libname: str, env: 'Environment', extra_dirs: T.List[str],
-                     libtype: LibType = LibType.PREFER_SHARED, lib_prefix_warning: bool = True) -> T.Optional[T.List[str]]:
+                     libtype: LibType = LibType.PREFER_SHARED, lib_prefix_warning: bool = True, ignore_system_dirs: bool = False) -> T.Optional[T.List[str]]:
         code = 'stop; end program'
-        return self._find_library_impl(libname, env, extra_dirs, code, libtype, lib_prefix_warning)
+        return self._find_library_impl(libname, env, extra_dirs, code, libtype, lib_prefix_warning, ignore_system_dirs)
 
     def has_multi_arguments(self, args: T.List[str], env: 'Environment') -> T.Tuple[bool, bool]:
         return self._has_multi_arguments(args, env, 'stop; end program')
@@ -114,14 +115,16 @@ class FortranCompiler(CLikeCompiler, Compiler):
         return self._has_multi_link_arguments(args, env, 'stop; end program')
 
     def get_options(self) -> 'MutableKeyedOptionDictType':
-        return self.update_options(
-            super().get_options(),
-            self.create_option(options.UserComboOption,
-                               self.form_compileropt_key('std'),
-                               'Fortran language standard to use',
-                               ['none'],
-                               'none'),
-        )
+        opts = super().get_options()
+
+        key = self.form_compileropt_key('std')
+        opts[key] = options.UserComboOption(
+            self.make_option_name(key),
+            'Fortran language standard to use',
+            'none',
+            choices=['none'])
+
+        return opts
 
     def _compile_int(self, expression: str, prefix: str, env: 'Environment',
                      extra_args: T.Union[None, T.List[str], T.Callable[[CompileCheckMode], T.List[str]]],
@@ -273,20 +276,19 @@ class GnuFortranCompiler(GnuCompiler, FortranCompiler):
                           'everything': default_warn_args + ['-Wextra', '-Wpedantic', '-fimplicit-none']}
 
     def get_options(self) -> 'MutableKeyedOptionDictType':
-        opts = FortranCompiler.get_options(self)
+        opts = super().get_options()
         fortran_stds = ['legacy', 'f95', 'f2003']
         if version_compare(self.version, '>=4.4.0'):
             fortran_stds += ['f2008']
         if version_compare(self.version, '>=8.0.0'):
             fortran_stds += ['f2018']
-        key = self.form_compileropt_key('std')
-        opts[key].choices = ['none'] + fortran_stds
+        self._update_language_stds(opts, fortran_stds)
         return opts
 
-    def get_option_compile_args(self, options: 'KeyedOptionDictType') -> T.List[str]:
+    def get_option_std_args(self, target: BuildTarget, env: Environment, subproject: T.Optional[str] = None) -> T.List[str]:
         args: T.List[str] = []
-        key = self.form_compileropt_key('std')
-        std = options.get_value(key)
+        std = self.get_compileropt_value('std', env, target, subproject)
+        assert isinstance(std, str)
         if std != 'none':
             args.append('-std=' + std)
         return args
@@ -335,10 +337,8 @@ class ElbrusFortranCompiler(ElbrusCompiler, FortranCompiler):
         ElbrusCompiler.__init__(self)
 
     def get_options(self) -> 'MutableKeyedOptionDictType':
-        opts = FortranCompiler.get_options(self)
-        fortran_stds = ['f95', 'f2003', 'f2008', 'gnu', 'legacy', 'f2008ts']
-        key = self.form_compileropt_key('std')
-        opts[key].choices = ['none'] + fortran_stds
+        opts = super().get_options()
+        self._update_language_stds(opts, ['f95', 'f2003', 'f2008', 'gnu', 'legacy', 'f2008ts'])
         return opts
 
     def get_module_outdir_args(self, path: str) -> T.List[str]:
@@ -415,16 +415,15 @@ class IntelFortranCompiler(IntelGnuLikeCompiler, FortranCompiler):
                           'everything': ['-warn', 'all']}
 
     def get_options(self) -> 'MutableKeyedOptionDictType':
-        opts = FortranCompiler.get_options(self)
-        key = self.form_compileropt_key('std')
-        opts[key].choices = ['none', 'legacy', 'f95', 'f2003', 'f2008', 'f2018']
+        opts = super().get_options()
+        self._update_language_stds(opts, ['none', 'legacy', 'f95', 'f2003', 'f2008', 'f2018'])
         return opts
 
-    def get_option_compile_args(self, options: 'KeyedOptionDictType') -> T.List[str]:
+    def get_option_std_args(self, target: BuildTarget, env: Environment, subproject: T.Optional[str] = None) -> T.List[str]:
         args: T.List[str] = []
-        key = self.form_compileropt_key('std')
-        std = options.get_value(key)
+        std = self.get_compileropt_value('std', env, target, subproject)
         stds = {'legacy': 'none', 'f95': 'f95', 'f2003': 'f03', 'f2008': 'f08', 'f2018': 'f18'}
+        assert isinstance(std, str)
         if std != 'none':
             args.append('-stand=' + stds[std])
         return args
@@ -447,6 +446,11 @@ class IntelLLVMFortranCompiler(IntelFortranCompiler):
 
     id = 'intel-llvm'
 
+    def get_preprocess_only_args(self) -> T.List[str]:
+        return ['-preprocess-only']
+
+    def get_dependency_gen_args(self, outtarget: str, outfile: str) -> T.List[str]:
+        return []
 
 class IntelClFortranCompiler(IntelVisualStudioLikeCompiler, FortranCompiler):
 
@@ -470,16 +474,15 @@ class IntelClFortranCompiler(IntelVisualStudioLikeCompiler, FortranCompiler):
                           'everything': ['/warn:all']}
 
     def get_options(self) -> 'MutableKeyedOptionDictType':
-        opts = FortranCompiler.get_options(self)
-        key = self.form_compileropt_key('std')
-        opts[key].choices = ['none', 'legacy', 'f95', 'f2003', 'f2008', 'f2018']
+        opts = super().get_options()
+        self._update_language_stds(opts, ['none', 'legacy', 'f95', 'f2003', 'f2008', 'f2018'])
         return opts
 
-    def get_option_compile_args(self, options: 'KeyedOptionDictType') -> T.List[str]:
+    def get_option_std_args(self, target: BuildTarget, env: Environment, subproject: T.Optional[str] = None) -> T.List[str]:
         args: T.List[str] = []
-        key = self.form_compileropt_key('std')
-        std = options.get_value(key)
+        std = self.get_compileropt_value('std', env, target, subproject)
         stds = {'legacy': 'none', 'f95': 'f95', 'f2003': 'f03', 'f2008': 'f08', 'f2018': 'f18'}
+        assert isinstance(std, str)
         if std != 'none':
             args.append('/stand:' + stds[std])
         return args
@@ -645,7 +648,11 @@ class LlvmFlangFortranCompiler(ClangCompiler, FortranCompiler):
         # https://github.com/llvm/llvm-project/commit/8d5386669ed63548daf1bee415596582d6d78d7d;
         # it seems flang 18 doesn't work if something accidentally includes a program unit, see
         # https://github.com/llvm/llvm-project/issues/92496
-        return search_dirs + ['-lFortranRuntime', '-lFortranDecimal']
+        # Only link FortranRuntime and FortranDecimal for flang < 19, see
+        # https://github.com/scipy/scipy/issues/21562#issuecomment-2942938509
+        if version_compare(self.version, '<19'):
+            search_dirs += ['-lFortranRuntime', '-lFortranDecimal']
+        return search_dirs
 
 
 class Open64FortranCompiler(FortranCompiler):

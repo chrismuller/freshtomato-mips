@@ -20,13 +20,16 @@
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="protocols.js?rel=<% version(); %>"></script>
 <script src="bwm-hist.js?rel=<% version(); %>"></script>
-<script src="bwm-common.js?rel=<% version(); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
 
 <script>
-
+//	<% jsdefaults(); %>
 //	<% devlist(); %>
+</script>
 
+<script src="bwm-common.js?rel=<% version(); %>"></script>
+
+<script>
 var cprefix = 'ipt_details';
 var cstats_busy = 0;
 
@@ -327,7 +330,7 @@ function init() {
 	filteripe_before = filteripe;
 
 	if (((c = cookie.get(cprefix + '_options_vis')) != null) && (c == '1')) {
-		toggleVisibility(cprefix, "options");
+		toggleVisibility(cprefix, 'options');
 	}
 
 	scale = fixInt(cookie.get(cprefix + '_scale'), 0, 2, 0);
@@ -429,7 +432,7 @@ function verifyFields(focused, quiet) {
 		<div id="loading">Loading...</div>
 	</div>
 
-	<div class="section-title">Options <small><i><a href='javascript:toggleVisibility(cprefix,"options");'><span id="sesdiv_options_showhide">(Show)</span></a></i></small></div>
+	<div class="section-title">Options <small><i><a href="javascript:toggleVisibility(cprefix,'options');" id="toggleLink-options"><span id="sesdiv_options_showhide">(Show)</span></a></i></small></div>
 	<div class="section" id="sesdiv_options" style="display:none">
 		<script>
 			var c;

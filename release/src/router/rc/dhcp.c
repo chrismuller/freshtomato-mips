@@ -31,7 +31,7 @@
  *
  * Modified for Tomato Firmware
  * Portions, Copyright (C) 2006-2009 Jonathan Zarate
- * Fixes/updates (C) 2018 - 2023 pedro
+ * Fixes/updates (C) 2018 - 2025 pedro
  *
  */
 
@@ -164,9 +164,10 @@ static int deconfig(char *ifname, char *prefix)
 
 static int bound(char *ifname, int renew, char *prefix)
 {
-	char tmp [32], tmp2[32];
+	char tmp[32], tmp2[32];
 	char *netmask, *dns, *gw;
 	int wan_proto = get_wanx_proto(prefix);
+	unsigned int i;
 
 	do_renew_file(0, prefix);
 
@@ -246,17 +247,12 @@ static int bound(char *ifname, int renew, char *prefix)
 
 		case WP_PPPOE:
 			logmsg(LOG_DEBUG, "*** %s: start_pppoe(%s) ...", __FUNCTION__, prefix);
-
-			if (!strcmp(prefix, "wan"))
-				start_pppoe(PPPOEWAN, prefix);
-			else if (!strcmp(prefix, "wan2"))
-				start_pppoe(PPPOEWAN2, prefix);
-#ifdef TCONFIG_MULTIWAN
-			else if (!strcmp(prefix, "wan3"))
-				start_pppoe(PPPOEWAN3, prefix);
-			else if (!strcmp(prefix, "wan4"))
-				start_pppoe(PPPOEWAN4, prefix);
-#endif
+			for (i = 1; i <= MWAN_MAX; i++) {
+				memset(tmp, 0, sizeof(tmp));
+				snprintf(tmp, sizeof(tmp), (i == 1 ? "wan" : "wan%d"), i);
+				if (!strcmp(prefix, tmp))
+					start_pppoe(PPPOEWAN(i), prefix);
+			}
 			break;
 		}
 	}
@@ -342,29 +338,29 @@ static int renew(char *ifname, char *prefix)
 int dhcpc_event_main(int argc, char **argv)
 {
 	char *ifname;
-	ifname = getenv("interface");
 	char prefix[] = "wanXX";
+	char name[8], tmp[16];
+	unsigned int i;
 
-	if (nvram_match("wan_ifname", ifname))
-		strlcpy(prefix, "wan", sizeof(prefix));
-	else if (nvram_match("wan_iface", ifname))
-		strlcpy(prefix, "wan", sizeof(prefix));
-	else if (nvram_match("wan2_ifname", ifname))
-		strlcpy(prefix, "wan2", sizeof(prefix));
-	else if (nvram_match("wan2_iface", ifname))
-		strlcpy(prefix, "wan2", sizeof(prefix));
-#ifdef TCONFIG_MULTIWAN
-	else if (nvram_match("wan3_ifname", ifname))
-		strlcpy(prefix, "wan3", sizeof(prefix));
-	else if (nvram_match("wan3_iface", ifname))
-		strlcpy(prefix, "wan3", sizeof(prefix));
-	else if (nvram_match("wan4_ifname", ifname))
-		strlcpy(prefix, "wan4", sizeof(prefix));
-	else if (nvram_match("wan4_iface", ifname))
-		strlcpy(prefix, "wan4", sizeof(prefix));
-#endif
-	else
-		strlcpy(prefix, "wan", sizeof(prefix));
+	ifname = getenv("interface");
+
+	memset(tmp, 0, sizeof(tmp));
+	strlcpy(prefix, "wan", sizeof(prefix)); /* default */
+
+	for (i = 1; i <= MWAN_MAX; i++) {
+		memset(name, 0, sizeof(name));
+		snprintf(name, sizeof(name), (i == 1 ? "wan" : "wan%u"), i);
+
+		memset(tmp, 0, sizeof(tmp));
+		snprintf(tmp, sizeof(tmp), "%s_ifname", name);
+		if (nvram_match(tmp, ifname))
+			strlcpy(prefix, name, sizeof(prefix));
+
+		memset(tmp, 0, sizeof(tmp));
+		snprintf(tmp, sizeof(tmp), "%s_iface", name);
+		if (nvram_match(tmp, ifname))
+			strlcpy(prefix, name, sizeof(prefix));
+	}
 
 	if (!wait_action_idle(10))
 		return 0;
@@ -449,8 +445,7 @@ int dhcpc_renew_main(int argc, char **argv)
 }
 
 static void restart_basic_services(void) {
-	stop_firewall();
-	start_firewall();
+	restart_firewall();
 	set_host_domain_name();
 	stop_dnsmasq();
 	dns_to_resolv();
@@ -798,7 +793,9 @@ void start_dhcp6c(void)
 {
 	FILE *f;
 	int prefix_len;
+	unsigned int i;
 	char *wan6face;
+	char buf[16];
 	char *argv[] = { "/usr/sbin/dhcp6c", "-T",
 			 NULL,	/* LL | LLT */
 			 NULL,	/* -D (Debug On) */
@@ -806,7 +803,7 @@ void start_dhcp6c(void)
 			 NULL,	/* interface */
 			 NULL };
 	int argc;
-	int ipv6_vlan = 0; /* bit 0 = IPv6 enabled for LAN1, bit 1 = IPv6 enabled for LAN2, bit 2 = IPv6 enabled for LAN3, 1 == TRUE, 0 == FALSE */
+	int ipv6_vlan = 0; /* bit 0 = IPv6 enabled for LAN1, bit 1 = IPv6 enabled for LAN2, bit 2 = IPv6 enabled for LAN3, etc; 1 == TRUE, 0 == FALSE */
 	int duid_type;
 
 	/* Check if turned on */
@@ -818,7 +815,7 @@ void start_dhcp6c(void)
 	/* check duid range */
 	if (duid_type < 1 || duid_type > 4)
 		duid_type = 3; /* default to DUID-LL */
-	  
+
 	argc = 2;
 	switch (duid_type) {
 		case 1: /* DUID-LLT */
@@ -867,29 +864,29 @@ void start_dhcp6c(void)
 		           nvram_safe_get("lan_ifname"),
 		           prefix_len);
 
-		/* check IPv6 for LAN1 */
-		if ((ipv6_vlan & 0x01) && (prefix_len >= 1) && (strcmp(nvram_safe_get("lan1_ipaddr"), "") != 0)) /* 2x IPv6 /64 networks possible --> for LAN and LAN1 */
-			fprintf(f, " prefix-interface %s {\n"
-			           "  sla-id 1;\n"
-			           "  sla-len %d;\n"
-			           "  ifid 1;\n" /* override the default EUI-64 address selection and create a very userfriendly address --> ::1 */
-			           " };\n", nvram_safe_get("lan1_ifname"), prefix_len);
+		/* check IPv6 for LAN1 - LANX */
+		for (i = 1; i < BRIDGE_COUNT; i++) {
 
-		/* check IPv6 for LAN2 */
-		if ((ipv6_vlan & 0x02) && (prefix_len >= 2) && (strcmp(nvram_safe_get("lan2_ipaddr"), "") != 0)) /* 4x IPv6 /64 networks possible --> for LAN to LAN2 */
-			fprintf(f, " prefix-interface %s {\n"
-		                   "  sla-id 2;\n"
-		                   "  sla-len %d;\n"
-		                   "  ifid 1;\n" /* override the default EUI-64 address selection and create a very userfriendly address --> ::1 */
-		                   " };\n", nvram_safe_get("lan2_ifname"), prefix_len);
+			if (i >= BRIDGE_COUNT_IPV6_MAX) /* Stop here if we reach this limit */
+				break;
 
-		/* check IPv6 for LAN3 */
-		if ((ipv6_vlan & 0x04) && (prefix_len >= 2) && (strcmp(nvram_safe_get("lan3_ipaddr"), "") != 0)) /* 4x IPv6 /64 networks possible --> for LAN to LAN3 */
-			fprintf(f, " prefix-interface %s {\n"
-			           "  sla-id 3;\n"
-			           "  sla-len %d;\n"
-			           "  ifid 1;\n" /* override the default EUI-64 address selection and create a very userfriendly address --> ::1 */
-			           " };\n", nvram_safe_get("lan3_ifname"), prefix_len);
+			memset(buf, 0, sizeof(buf));
+			snprintf(buf, sizeof(buf), "lan%u_ipaddr", i);
+
+			/* more IPv6 /64 networks possible --> for LAN1 to LANX */
+			if ((ipv6_vlan & (1U << (i - 1))) && /* Check GUI */
+			    ((1U << prefix_len) > i) && /* Check prefix - x IPv6 /64 networks possible */
+			    (strcmp(nvram_safe_get(buf), "") != 0)) { /* check lanX_ipaddr */
+				memset(buf, 0, sizeof(buf));
+				snprintf(buf, sizeof(buf), "lan%u_ifname", i);
+
+				fprintf(f, " prefix-interface %s {\n"
+				           "  sla-id %u;\n"
+				           "  sla-len %d;\n"
+				           "  ifid 1;\n" /* override the default EUI-64 address selection and create a very userfriendly address --> ::1 */
+				           " };\n", nvram_safe_get(buf), i, prefix_len);
+			}
+		}
 
 		fprintf(f, "};\n"
 		           "id-assoc na 0 { };\n");

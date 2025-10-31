@@ -1,8 +1,10 @@
 /*
  *
  * Tomato Firmware
- * Copyright (C) 2007-2009 Jonathan Zarate
- * Fixes/updates (C) 2018 - 2024 pedro
+ * Copyright (C) 2006-2009 Jonathan Zarate
+ *
+ * Fixes/updates (C) 2018 - 2025 pedro
+ * https://freshtomato.org/
  *
  */
 
@@ -16,24 +18,33 @@
 void asp_ddnsx(int argc, char **argv)
 {
 	char *p, *q;
-	int i;
+	unsigned int i;
 #if !defined(TCONFIG_NVRAM_32K) && !defined(TCONFIG_OPTIMIZE_SIZE)
-	int clients_num = 4;
+	unsigned int clients_num = 4;
 #else
-	int clients_num = 2;
+	unsigned int clients_num = 2;
 #endif
-	char s[64];
-	char m[128];
-	char name[64];
+	char s[64], m[128], name[64];
 	time_t tt;
 	struct stat st;
 
-	web_printf("\nddnsx_wanip = '%s';", get_wanip("wan"));
-	web_printf("\nddnsx2_wanip = '%s';", get_wanip("wan2"));
-#ifdef TCONFIG_MULTIWAN
-	web_printf("\nddnsx3_wanip = '%s';", get_wanip("wan3"));
-	web_printf("\nddnsx4_wanip = '%s';", get_wanip("wan4"));
-#endif
+	web_puts("\nif (typeof nvram === 'undefined' || nvram.length == 0) nvram = { };");
+
+	for (i = 1; i <= MWAN_MAX; i++) {
+		memset(name, 0, sizeof(name));
+		snprintf(name, sizeof(name), (i == 1 ? "wan" : "wan%u"), i);
+
+		memset(s, 0, sizeof(s));
+		snprintf(s, sizeof(s), (i == 1 ? "ddnsx_wanip" : "ddnsx%u_wanip"), i);
+		web_printf("\n%s = '%s';", s, get_wanip(name));
+		snprintf(s, sizeof(s), "%s_dns", name);
+		snprintf(m, sizeof(m), "nvram.%s_dns", name);
+		web_printf("\n%s = '%s';", m, nvram_safe_get(s));
+		snprintf(s, sizeof(s), "%s_proto", name);
+		snprintf(m, sizeof(m), "nvram.%s_proto", name);
+		web_printf("\n%s = '%s';", m, nvram_safe_get(s));
+	}
+
 	web_printf("\nddnsx0_ip_get = '%s';", nvram_safe_get("ddnsx0_ip"));
 	web_printf("\nddnsx1_ip_get = '%s';", nvram_safe_get("ddnsx1_ip"));
 #if !defined(TCONFIG_NVRAM_32K) && !defined(TCONFIG_OPTIMIZE_SIZE)
@@ -41,20 +52,6 @@ void asp_ddnsx(int argc, char **argv)
 	web_printf("\nddnsx3_ip_get = '%s';", nvram_safe_get("ddnsx3_ip"));
 #endif
 
-	web_puts("\nif (typeof nvram === 'undefined' || nvram.length == 0) nvram = { };");
-
-	web_printf("\nnvram.wan_dns = '%s';", nvram_safe_get("wan_dns"));
-	web_printf("\nnvram.wan2_dns = '%s';", nvram_safe_get("wan2_dns"));
-#ifdef TCONFIG_MULTIWAN
-	web_printf("\nnvram.wan3_dns = '%s';", nvram_safe_get("wan3_dns"));
-	web_printf("\nnvram.wan4_dns = '%s';", nvram_safe_get("wan4_dns"));
-#endif
-	web_printf("\nnvram.wan_proto = '%s';", nvram_safe_get("wan_proto"));
-	web_printf("\nnvram.wan2_proto = '%s';", nvram_safe_get("wan2_proto"));
-#ifdef TCONFIG_MULTIWAN
-	web_printf("\nnvram.wan3_proto = '%s';", nvram_safe_get("wan3_proto"));
-	web_printf("\nnvram.wan4_proto = '%s';", nvram_safe_get("wan4_proto"));
-#endif
 	web_printf("\nnvram.dnscrypt_proxy = '%s';", nvram_safe_get("dnscrypt_proxy"));
 	web_printf("\nnvram.stubby_proxy = '%s';", nvram_safe_get("stubby_proxy"));
 	web_printf("\nnvram.dnscrypt_priority = '%s';", nvram_safe_get("dnscrypt_priority"));
@@ -64,7 +61,7 @@ void asp_ddnsx(int argc, char **argv)
 
 	for (i = 0; i < clients_num; ++i) {
 		web_puts(i ? "','" : "'");
-		snprintf(name, sizeof(name), "/var/lib/mdu/ddnsx%d.msg", i);
+		snprintf(name, sizeof(name), "/var/lib/mdu/ddnsx%u.msg", i);
 		f_read_string(name, m, sizeof(m)); /* null term'd even on error */
 		if (m[0] != 0) {
 			if ((stat(name, &st) == 0) && (st.st_mtime > Y2K)) {
@@ -79,9 +76,9 @@ void asp_ddnsx(int argc, char **argv)
 
 	for (i = 0; i < clients_num; ++i) {
 		web_puts(i ? "','" : "'");
-		snprintf(name, sizeof(name), "ddnsx%d", i);
+		snprintf(name, sizeof(name), "ddnsx%u", i);
 		if (!nvram_match(name, "")) {
-			snprintf(name, sizeof(name), "ddnsx%d_cache", i);
+			snprintf(name, sizeof(name), "ddnsx%u_cache", i);
 			if ((p = nvram_get(name)) == NULL)
 				continue;
 

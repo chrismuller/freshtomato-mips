@@ -1,5 +1,5 @@
 /* Locking in multithreaded situations.
-   Copyright (C) 2005-2024 Free Software Foundation, Inc.
+   Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -255,7 +255,7 @@ glthread_recursive_lock_destroy (gl_recursive_lock_t *lock)
 #  if defined PTHREAD_RWLOCK_INITIALIZER || defined PTHREAD_RWLOCK_INITIALIZER_NP
 
 #   if !HAVE_PTHREAD_RWLOCK_RDLOCK_PREFER_WRITER
-     /* glibc with bug https://sourceware.org/bugzilla/show_bug.cgi?id=13701 */
+     /* glibc with bug https://sourceware.org/PR13701 */
 
 int
 glthread_rwlock_init_for_glibc (pthread_rwlock_t *lock)

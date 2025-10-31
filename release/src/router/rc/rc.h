@@ -31,6 +31,7 @@
 #include <arpa/inet.h>
 #include <sys/sysinfo.h>
 #include <time.h>
+#include <dirent.h>
 
 #include <bcmnvram.h>
 #include <shutils.h>
@@ -51,12 +52,7 @@
 #define REDIAL		1
 #define CONNECTING	2
 
-#define PPPOEWAN	0
-#define PPPOEWAN2	1
-#ifdef TCONFIG_MULTIWAN
-#define PPPOEWAN3	2
-#define PPPOEWAN4	3
-#endif
+#define PPPOEWAN(n)	((n) - 1)
 
 /* see init.c - used for /proc/sys/vm/min_free_kbytes */
 #define TOMATO_RAM_HIGH_END	(200 * 1024)
@@ -82,6 +78,38 @@ typedef enum { IPT_TABLE_NAT, IPT_TABLE_FILTER, IPT_TABLE_MANGLE } ipt_table_t;
 #define IPT_ANY_AF		(IPT_V4 | IPT_V6)
 #define IPT_AF_IS_EMPTY(f)	((f & IPT_ANY_AF) == 0)
 
+#if defined(TCONFIG_OPENVPN) || defined(TCONFIG_WIREGUARD)
+/* wireguard max count */
+#define WG_INTERFACE_MAX	3
+/* OpenVPN clients/servers count */
+#define OVPN_SERVER_MAX		2
+#if defined(TCONFIG_BCMARM)
+#define OVPN_CLIENT_MAX		3
+#else
+#define OVPN_CLIENT_MAX		2
+#endif
+#define OVPN_DIR		"/etc/openvpn"
+#define OVPN_DNS_DIR		OVPN_DIR"/dns"
+#define OVPN_FW_DIR		OVPN_DIR"/fw"
+#define OVPN_DEL_SCRIPT		"clear-fw-tmp.sh"
+#define OVPN_DIR_DEL_SCRIPT	OVPN_FW_DIR"/"OVPN_DEL_SCRIPT
+#define WG_DIR			"/etc/wireguard"
+#define WG_DNS_DIR		WG_DIR"/dns"
+#define WG_SCRIPTS_DIR		WG_DIR"/scripts"
+#define WG_KEYS_DIR		WG_DIR"/keys"
+#define WG_FW_DIR		WG_DIR"/fw"
+#define WG_DEL_SCRIPT		"clear-fw-tmp.sh"
+#define WG_DIR_DEL_SCRIPT	WG_FW_DIR"/"WG_DEL_SCRIPT
+
+/* OpenVPN/wireguard routing policy modes (rgw/rgwr) */
+enum {
+	VPN_RGW_NONE = 0,
+	VPN_RGW_ALL,
+	VPN_RGW_POLICY,
+	VPN_RGW_POLICY_STRICT
+};
+#endif /* TCONFIG_OPENVPN || TCONFIG_WIREGUARD */
+
 const char *chain_in_drop;
 const char *chain_in_accept;
 const char *chain_out_drop;
@@ -101,11 +129,21 @@ static inline int is_psta(int idx, int unit, int subunit, void *param)
 #endif /* TCONFIG_BCMWL6 */
 
 /* rc.c */
+typedef void (*_tf_ipt_write)(const char *format, ... );
+typedef void (*_tf_ip6t_write)(const char *format, ... );
 extern void chains_log_detection(void);
 extern void fix_chain_in_drop(void);
 extern int env2nv(char *env, char *nv);
 extern int serialize_restart(char *service, int start);
-extern void run_del_firewall_script(char *infile, char *outfile);
+extern void run_del_firewall_script(const char *infile, char *outfile);
+#if defined(TCONFIG_OPENVPN) || defined(TCONFIG_WIREGUARD)
+#ifdef TCONFIG_IPV6
+extern void kill_switch(_tf_ipt_write ipt_write, _tf_ip6t_write ip6t_write);
+#else
+extern void kill_switch(_tf_ipt_write ipt_write);
+#endif
+extern void run_vpn_firewall_scripts(const char *kind);
+#endif
 
 /* init.c */
 extern int init_main(int argc, char *argv[]);
@@ -197,7 +235,10 @@ extern void stop_wireless(void);
 extern void start_wireless(void);
 extern void restart_wireless(void);
 extern void start_wl(void);
-extern int disabled_wl(int idx, int unit, int subunit, void *param);
+extern int disabled_wl_vif(int idx, int unit, int subunit, void *param);
+#ifdef TCONFIG_BCMARM
+extern int enabled_wl_vif(int idx, int unit, int subunit, void *param);
+#endif /* TCONFIG_BCMARM */
 extern void unload_wl(void);
 extern void load_wl(void);
 #ifdef TCONFIG_IPV6
@@ -253,11 +294,7 @@ extern void start_udpxy(void);
 extern void stop_udpxy(void);
 extern void start_httpd(void);
 extern void stop_httpd(void);
-extern void clear_resolv(void);
 extern void dns_to_resolv(void);
-extern void start_dnsmasq(void);
-extern void stop_dnsmasq(void);
-extern void reload_dnsmasq(void);
 #ifdef TCONFIG_STUBBY
 extern void start_stubby(void);
 extern void stop_stubby(void);
@@ -319,6 +356,7 @@ extern void del_upnp_defaults(void);
 extern void add_bsd_defaults(void);
 extern void del_bsd_defaults(void);
 #endif /* TCONFIG_BCMBSD */
+extern void restart_firewall(void);
 
 /* usb.c */
 #ifdef TCONFIG_USB
@@ -344,13 +382,7 @@ extern void stop_nas(void);
 extern void notify_nas(const char *ifname);
 
 /* firewall.c */
-typedef void (*_tf_ipt_write)(const char *format, ... );
-extern wanface_list_t wanfaces;
-extern wanface_list_t wan2faces;
-#ifdef TCONFIG_MULTIWAN
-extern wanface_list_t wan3faces;
-extern wanface_list_t wan4faces;
-#endif
+extern wanface_list_t wanfaces[MWAN_MAX];
 extern char lanaddr[BRIDGE_COUNT][32];
 extern char lanmask[BRIDGE_COUNT][32];
 extern char lanface[BRIDGE_COUNT][IFNAMSIZ + 1];
@@ -385,7 +417,6 @@ extern void create_test_iptfile(void);
 #endif
 extern void allow_fastnat(const char *service, int allow);
 extern void try_enabling_fastnat(void);
-extern void log_segfault(void);
 
 /* forward.c */
 extern void ipt_forward(ipt_table_t table);
@@ -505,20 +536,20 @@ extern void stop_sched(void);
 
 /* pptp_client.c */
 #ifdef TCONFIG_PPTPD
-#define PPTP_CLIENT_TABLE_ID 5
-#define PPTP_CLIENT_TABLE_NAME "PPTP"
-extern void start_pptp_client(void);
-extern void stop_pptp_client(void);
-extern void start_pptp_client_eas(void);
-extern void stop_pptp_client_eas(void);
-extern int write_pptp_client_resolv(FILE*);
+#define PPTPC_TABLE_ID 5
+#define PPTPC_TABLE_NAME "PPTP"
+extern void start_pptpc(void);
+extern void stop_pptpc(void);
+extern void start_pptpc_eas(void);
+extern void stop_pptpc_eas(void);
+extern int write_pptpc_resolv(FILE*);
 extern int pptpc_ipup_main(int argc, char **argv);
 extern int pptpc_ipdown_main(int argc, char **argv);
-extern void pptp_client_firewall(const char *table, const char *opt, _tf_ipt_write table_writer);
+extern void pptpc_firewall(const char *table, const char *opt, _tf_ipt_write table_writer);
 #else
-static inline void start_pptp_client_eas(void) {};
-static inline void stop_pptp_client_eas(void) {};
-#define write_pptp_client_resolv(f) (0)
+static inline void start_pptpc_eas(void) {};
+static inline void stop_pptpc_eas(void) {};
+#define write_pptpc_resolv(f) (0)
 #endif
 
 /* nvram */
@@ -659,5 +690,15 @@ extern void start_ftpd(int force);
 extern void stop_ftpd(void);
 extern void run_ftpd_firewall_script(void);
 #endif
+
+/* dnsmasq.c */
+extern void start_dnsmasq(void);
+extern void stop_dnsmasq(void);
+extern void reload_dnsmasq(void);
+extern void clear_resolv(void);
+extern const char dmhosts[];
+extern const char dmresolv[];
+extern const char dmipset[];
+extern pid_t pid_dnsmasq;
 
 #endif /* __RC_H__ */

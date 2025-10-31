@@ -18,7 +18,7 @@
 <title>[<% ident(); %>] Tinc Mesh VPN</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 
 <script>
@@ -36,21 +36,19 @@ function show() {
 	var d = isup.tincd;
 
 	countButton += 1;
-	for (var i = 1; i <= 4; i++) {
-		var e = E('_tinc_button'+i);
-		e.value = (d ? 'Stop' : 'Start')+' Now';
-		e.setAttribute('onclick', 'javascript:toggle(\'tinc\','+d+');');
-		if (serviceLastUp[0] != d || countButton > 6) {
-			e.disabled = 0;
-			E('spin'+i).style.display = 'none';
-		}
+	var e = E('_tinc_button');
+	e.value = (d ? 'Stop' : 'Start')+' Now';
+	e.setAttribute('onclick', 'javascript:toggle(\'tinc\','+d+');');
+	if (serviceLastUp[0] != d || countButton > 6) {
+		e.disabled = 0;
+		E('spin').style.display = 'none';
 	}
 	if (serviceLastUp[0] != d || countButton > 6) {
 		serviceLastUp[0] = d;
 		countButton = 0;
 	}
 
-	E('_tinc_running').innerHTML = 'Tinc is currently '+(d ? 'running ' : 'stopped');
+	E('_tinc_notice').innerHTML = (d ? '<span class="service_up"><span class="servup_image">▲ <\/span>Up<\/span>' : '<span class="service_down"><span class="servdn_image">▽ <\/span>Down<\/span>');
 	E('edges').disabled = !d;
 	E('connections').disabled = !d;
 	E('subnets').disabled = !d;
@@ -77,19 +75,17 @@ function toggle(service, isup) {
 		changed = 1;
 
 	if (!save_pre()) return;
-	if (changed) alert("Configuration changes were detected - they will be saved");
+	if (changed) alert('Configuration changes detected - will be saved');
 
 	serviceLastUp[0] = isup;
 	countButton = 0;
 
-	for (var i = 1; i <= 4; i++) {
-		E('_'+service+'_button'+i).disabled = 1;
-		E('spin'+i).style.display = 'inline';
-	}
+	E('_'+service+'_button').disabled = 1;
+	E('spin').style.display = 'inline';
 
-	elem.display(E('result'), !isup);
+	elem.display(E('status-result'), !isup);
 	if (!isup)
-		elem.setInnerHTML(E('result'), '');
+		elem.setInnerHTML(E('status-result'), '');
 
 	var fom = E('t_fom');
 	fom._service.value = service+(isup ? '-stop' : '-start');
@@ -276,13 +272,13 @@ function generateKeys() {
 }
 
 function displayStatus() {
-	elem.setInnerHTML(E('result'), '<tt>'+escapeText(cmdresult)+'<\/tt>');
+	elem.setInnerHTML(E('status-result'), escapeText(cmdresult));
 	cmdresult = '';
 	spin(0, 'statusWait');
 }
 
 function updateStatus(type) {
-	elem.setInnerHTML(E('result'), '');
+	elem.setInnerHTML(E('status-result'), '');
 	spin(1, 'statusWait');
 
 	cmd = new XmlHttp();
@@ -340,26 +336,6 @@ function updateNodes() {
 		var c = '/usr/sbin/tinc dump nodes | /bin/busybox awk \'{print $1}\'';
 		cmd.post('shell.cgi', 'action=execute&command='+escapeCGI(c.replace(/\r/g, '')));
 	}
-}
-
-function displayVersion() {
-	elem.setInnerHTML(E('version'), escapeText(cmdresult.substring(0, cmdresult.length - 1)));
-	cmdresult = '';
-}
-
-function getVersion() {
-	cmd = new XmlHttp();
-	cmd.onCompleted = function(text, xml) {
-		eval(text);
-		displayVersion();
-	}
-	cmd.onError = function(x) {
-		cmdresult = 'ERROR: '+x;
-		displayVersion();
-	}
-
-	var c = '/usr/sbin/tinc --version | /bin/busybox awk \'NR==1 {print $3}\'';
-	cmd.post('shell.cgi', 'action=execute&command='+escapeCGI(c.replace(/\r/g, '')));
 }
 
 function tabSelect(name) {
@@ -492,7 +468,6 @@ function save(nomsg) {
 
 function earlyInit() {
 	tabSelect(cookie.get(cprefix+'_tab') || 'config');
-	getVersion();
 	show();
 	verifyFields(null, 1);
 }
@@ -532,7 +507,16 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title" id="tinc-title">Tinc <span id="version"></span> Configuration</div>
+<div class="section-title">Status</div>
+<div class="section">
+	<div class="fields">
+		<span id="_tinc_notice"></span><input type="button" id="_tinc_button">&nbsp; <img src="spin.svg" alt="" id="spin">
+	</div>
+</div>
+
+<!-- / / / -->
+
+<div class="section-title" id="tinc-title"><span class="tincsvg">&nbsp;</span>Tinc Configuration</div>
 <script>
 	tabCreate.apply(this, tabs);
 
@@ -543,18 +527,17 @@ function init() {
 	W('<div class="section">');
 	createFieldTable('', [
 		{ title: 'Enable on Start', name: 'f_tinc_enable', type: 'checkbox', value: (nvram.tinc_enable == 1) },
+		{ title: 'Poll Interval', name: 'tinc_poll', type: 'text', maxlen: 4, size: 5, value: nvram.tinc_poll, suffix: ' <small>minutes; 0 to disable<\/small>' },
 		{ title: 'Interface Type', name: 'tinc_devicetype', type: 'select', options: [['tun','TUN'],['tap','TAP']], value: nvram.tinc_devicetype },
 		{ title: 'Mode', name: 'tinc_mode', type: 'select', options: [['switch','Switch'],['hub','Hub']], value: nvram.tinc_mode },
 		{ title: 'VPN Netmask', name: 'tinc_vpn_netmask', type: 'text', maxlen: 15, size: 25, value: nvram.tinc_vpn_netmask,  suffix: ' <small>netmask for the entire VPN network<\/small>' },
 		{ title: 'Host Name', name: 'tinc_name', type: 'text', maxlen: 30, size: 25, value: nvram.tinc_name, suffix: ' <small>must also be defined in the \'Hosts\' area<\/small>' },
-		{ title: 'Poll Interval', name: 'tinc_poll', type: 'text', maxlen: 4, size: 5, value: nvram.tinc_poll, suffix: ' <small>minutes; 0 to disable<\/small>' },
 		{ title: 'Ed25519 Private Key', name: 'tinc_private_ed25519', type: 'textarea', value: nvram.tinc_private_ed25519 },
 		{ title: 'RSA Private Key *', name: 'tinc_private_rsa', type: 'textarea', value: nvram.tinc_private_rsa },
 		{ title: 'Custom', name: 'tinc_custom', type: 'textarea', value: nvram.tinc_custom }
 	]);
 
 	W('<small><b style="font-size: 1.5em">*<\/b> Only required to create legacy connections with tinc1.0 nodes.<\/small>');
-	W('<div class="vpn-start-stop"><input type="button" value="" onclick="" id="_tinc_button1">&nbsp; <img src="spin.gif" alt="" id="spin1"><\/div>');
 	W('<\/div><\/div>');
 	/* -------- END CONFIG TAB ----------- */
 
@@ -572,10 +555,9 @@ function init() {
 	]);
 
 	W('<small><b style="font-size: 1.5em">*<\/b> Only required to create legacy connections with tinc1.0 nodes.<\/small>');
-	W('<div class="vpn-start-stop"><input type="button" value="" onclick="" id="_tinc_button2">&nbsp; <img src="spin.gif" alt="" id="spin2"><\/div>');
 	W('<\/div>');
 
-	W('<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,\'hosts\');"><span id="sesdiv_hosts_showhide">(Show)<\/span><\/a><\/i><\/small><\/div>');
+	W('<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,\'hosts\');" id="toggleLink-hosts"><span id="sesdiv_hosts_showhide">(Show)<\/span><\/a><\/i><\/small><\/div>');
 	W('<div class="section" id="sesdiv_hosts" style="display:none">');
 	W('<ul>');
 	W('<li><b>ConnectTo<\/b> - Tinc will try to establish a meta-connection to the host. Requires the Address field.');
@@ -605,7 +587,6 @@ function init() {
 		{ title: 'subnet-down', name: 'tinc_subnet_down', type: 'textarea', value: nvram.tinc_subnet_down }
 	]);
 
-	W('<div class="vpn-start-stop"><input type="button" value="" onclick="" id="_tinc_button3">&nbsp; <img src="spin.gif" alt="" id="spin3"><\/div>');
 	W('<\/div><\/div>');
 	/* -------- END SCRIPTS TAB ----------- */
 
@@ -621,7 +602,7 @@ function init() {
 	]);
 
 	W('<input type="button" value="Generate Keys" onclick="generateKeys()" id="execb"> ');
-	W('<div style="display:none" id="generateWait"> Please wait... <img src="spin.gif" alt="" style="vertical-align:middle"><\/div>');
+	W('<div style="display:none" id="generateWait"> Please wait... <img src="spin.svg" alt="" style="vertical-align:middle"><\/div>');
 	W('<\/div><\/div>');
 	/* -------- END KEYS TAB ----------- */
 
@@ -630,7 +611,6 @@ function init() {
 	W('<div class="fields">');
 
 	W('<div class="section">');
-	W('<div class="vpn-start-stop"><span id="_tinc_running"><\/span> <input type="button" value="" onclick="" id="_tinc_button4">&nbsp; <img src="spin.gif" alt="" id="spin4"><\/div>');
 	W('<\/div>');
 
 	W('<div class="section">');
@@ -638,12 +618,12 @@ function init() {
 	W('<div class="vpn-status-btn"><input type="button" value="Subnets" onclick="updateStatus(\'subnets\')" id="subnets" style="min-width:85px"><\/div>');
 	W('<div class="vpn-status-btn"><input type="button" value="Connections" onclick="updateStatus(\'connections\')" id="connections" style="min-width:85px"><\/div>');
 	W('<div class="vpn-status-btn"><input type="button" value="Nodes" onclick="updateStatus(\'nodes\')" id="nodes" style="min-width:85px"><\/div>');
-	W('<div style="display:none;padding-left:5px" id="statusWait"> Please wait... <img src="spin.gif" alt="" style="vertical-align:top"><\/div>');
+	W('<div style="display:none;padding-left:5px" id="statusWait"> Please wait... <img src="spin.svg" alt="" style="vertical-align:top"><\/div>');
 	W('<\/div>');
 
 	W('<div class="section">');
 	W('<div><input type="button" value="Info" onclick="updateStatus(\'info\')" id="info" style="min-width:85px"> <select id="hostselect" style="min-width:85px"><\/select><\/div>');
-	W('<pre id="result" class="status-result"><\/pre>');
+	W('<pre id="status-result" class="status-result"><\/pre>');
 	W('<\/div>');
 	W('<\/div><\/div>');
 	/* -------- END KEY TAB ----------- */

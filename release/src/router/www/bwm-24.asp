@@ -16,14 +16,16 @@
 <% css(); %>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="wireless.jsx?_http_id=<% nv(http_id); %>"></script>
-<script src="bwm-common.js?rel=<% version(); %>"></script>
 <script src="bwm-hist.js?rel=<% version(); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
 
 <script>
+//	<% nvram("wan_ifname,wan_iface,lan_ifname,wan_proto,web_svg,web_css,rstats_enable,wl_nband"); %>
+</script>
 
-//	<% nvram("wan_ifname,wan_iface,wan2_ifname,wan2_iface,wan3_ifname,wan3_iface,wan4_ifname,wan4_iface,lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname,wan_proto,wan2_proto,wan3_proto,wan4_proto,web_svg,web_css,rstats_enable,wl_nband"); %>
+<script src="bwm-common.js?rel=<% version(); %>"></script>
 
+<script>
 var cprefix = 'bw_24';
 var updateInt = 60;
 var updateDiv = updateInt;
@@ -236,7 +238,7 @@ function init() {
 
 <div id="footer">
 	<span id="dtime"></span>
-	<img src="spin.gif" id="refresh-spinner" alt="" onclick="debugTime=1">
+	<img src="spin.svg" id="refresh-spinner" alt="" onclick="debugTime=1">
 	<input type="button" value="Refresh" id="refresh-button" onclick="ref.toggleX()">
 </div>
 

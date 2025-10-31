@@ -474,7 +474,7 @@ sg.populate = function(style, sshow, filter) {
 			e.col = '<div><\/div>';
 		}
 		if (mac.match(/^(..):(..):(..)/))
-			mac = '<div style="display:none" id="gW_'+i+'">&nbsp; <img src="spin.gif" alt="" style="vertical-align:middle"><\/div><a href="javascript:searchOUI(\''+RegExp.$1+'-'+RegExp.$2+'-'+RegExp.$3+'\','+i+')" title="OUI Search">'+mac+'<\/a>';
+			mac = '<div style="display:none" id="gW_'+i+'">&nbsp; <img src="spin.svg" alt="" style="vertical-align:middle"><\/div><a href="javascript:searchOUI(\''+RegExp.$1+'-'+RegExp.$2+'-'+RegExp.$3+'\','+i+')" title="OUI Search">'+mac+'<\/a>';
 
 		sg.insert(-1, e, [ '<small>'+seen+'<\/small>', ''+e.col, ''+e.ssid, mac, (e.rssi < 0 ? e.rssi+'' : ''), ''+e.snr,
 		          (e.qual < 0 ? '' : '<small>'+e.qual+'<\/small><br><img src="bar'+MIN(MAX(Math.floor(e.qual / 12), 1), 6)+'.gif" id="bar_'+i+'" alt="">'),
@@ -830,8 +830,8 @@ function init() {
 	</div>
 	<br>
 	<div id="wl-controls">
-		<table border="0"><tr><td>
-			<label for="freqfilter">Display: </label>
+		<table style="border:none"><tr><td>
+			<label for="freq-filter">Display: </label>
 				<select id="freq-filter" onchange="doit();">
 					<option value="2.4">2.4 GHz</option>
 					<option value="5">5 GHz</option>
@@ -886,7 +886,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<script>
@@ -906,7 +906,7 @@ function init() {
 <div id="footer">
 	<div id="survey-controls">
 		Timeout:
-		<img src="spin.gif" alt="" id="refresh-spinner">
+		<img src="spin.svg" alt="" id="refresh-spinner">
 		<script>
 			genStdTimeList('expire-time', 'Never = ♾️', 10);
 			genStdTimeList('refresh-time', 'One off', 10);

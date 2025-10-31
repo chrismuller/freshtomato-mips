@@ -19,7 +19,7 @@
 
 <script>
 
-//	<% nvram ("lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname,lan_access");%> 
+//	<% nvram ("lan_ifname,lan_access");%>
 
 var cprefix = 'advanced_access';
 
@@ -195,11 +195,11 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<li><b>Src</b> - Source LAN bridge.</li>
-		<li><b>Src Address</b> <i>(optional)</i> - Source address allowed. Ex: "1.2.3.4", "1.2.3.4 - 2.3.4.5", "1.2.3.0/24".</li>
+		<li><b>Src Address</b> <i>(optional)</i> - Source address allowed. Ex: "1.2.3.4", "1.2.3.4-2.3.4.5", "1.2.3.0/24".</li>
 		<li><b>Dst</b> - Destination LAN bridge.</li>
 		<li><b>Dst Address</b> <i>(optional)</i> - Destination address inside the LAN.</li>
 	</ul>

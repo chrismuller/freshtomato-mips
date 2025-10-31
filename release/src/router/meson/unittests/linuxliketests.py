@@ -43,7 +43,7 @@ PKG_CONFIG = os.environ.get('PKG_CONFIG', 'pkg-config')
 
 
 from run_tests import (
-    get_fake_env
+    get_fake_env, Backend,
 )
 
 from .baseplatformtests import BasePlatformTests
@@ -446,6 +446,24 @@ class LinuxlikeTests(BasePlatformTests):
         libdir = self.installdir + os.path.join(self.prefix, self.libdir)
         self._test_soname_impl(libdir, True)
 
+    @skip_if_not_base_option('b_sanitize')
+    def test_c_link_args_and_env(self):
+        '''
+        Test that the CFLAGS / CXXFLAGS environment variables are
+        included on the linker command line when c_link_args is
+        set but c_args is not.
+        '''
+        if is_cygwin():
+            raise SkipTest('asan not available on Cygwin')
+        if is_openbsd():
+            raise SkipTest('-fsanitize=address is not supported on OpenBSD')
+
+        testdir = os.path.join(self.common_test_dir, '1 trivial')
+        env = {'CFLAGS': '-fsanitize=address'}
+        self.init(testdir, extra_args=['-Dc_link_args="-L/usr/lib"'],
+                  override_envvars=env)
+        self.build()
+
     def test_compiler_check_flags_order(self):
         '''
         Test that compiler check flags override all other flags. This can't be
@@ -590,8 +608,6 @@ class LinuxlikeTests(BasePlatformTests):
         Test that files installed by these tests have the correct permissions.
         Can't be an ordinary test because our installed_files.txt is very basic.
         '''
-        if is_cygwin():
-            self.new_builddir_in_tempdir()
         # Test file modes
         testdir = os.path.join(self.common_test_dir, '12 data')
         self.init(testdir)
@@ -644,8 +660,6 @@ class LinuxlikeTests(BasePlatformTests):
         '''
         Test that files are installed with correct permissions using install_mode.
         '''
-        if is_cygwin():
-            self.new_builddir_in_tempdir()
         testdir = os.path.join(self.common_test_dir, '190 install_mode')
         self.init(testdir)
         self.build()
@@ -684,8 +698,6 @@ class LinuxlikeTests(BasePlatformTests):
         install umask of 022, regardless of the umask at time the worktree
         was checked out or the build was executed.
         '''
-        if is_cygwin():
-            self.new_builddir_in_tempdir()
         # Copy source tree to a temporary directory and change permissions
         # there to simulate a checkout with umask 002.
         orig_testdir = os.path.join(self.unit_test_dir, '26 install umask')
@@ -992,6 +1004,22 @@ class LinuxlikeTests(BasePlatformTests):
             self.assertEqual(got_rpath, yonder_libdir, rpath_format)
 
     @skip_if_not_base_option('b_sanitize')
+    def test_env_cflags_ldflags(self):
+        if is_cygwin():
+            raise SkipTest('asan not available on Cygwin')
+        if is_openbsd():
+            raise SkipTest('-fsanitize=address is not supported on OpenBSD')
+
+        testdir = os.path.join(self.common_test_dir, '1 trivial')
+        env = {'CFLAGS': '-fsanitize=address', 'LDFLAGS': '-I.'}
+        self.init(testdir, override_envvars=env)
+        self.build()
+        compdb = self.get_compdb()
+        for i in compdb:
+            self.assertIn("-fsanitize=address", i["command"])
+        self.wipe()
+
+    @skip_if_not_base_option('b_sanitize')
     def test_pch_with_address_sanitizer(self):
         if is_cygwin():
             raise SkipTest('asan not available on Cygwin')
@@ -1233,8 +1261,9 @@ class LinuxlikeTests(BasePlatformTests):
         myenv['PKG_CONFIG_PATH'] = _prepend_pkg_config_path(self.privatedir)
         stdo = subprocess.check_output([PKG_CONFIG, '--libs-only-l', 'libsomething'], env=myenv)
         deps = [b'-lgobject-2.0', b'-lgio-2.0', b'-lglib-2.0', b'-lsomething']
-        if is_windows() or is_cygwin() or is_osx() or is_openbsd():
+        if is_windows() or is_osx() or is_openbsd():
             # On Windows, libintl is a separate library
+            # It used to be on Cygwin as well, but no longer is.
             deps.append(b'-lintl')
         self.assertEqual(set(deps), set(stdo.split()))
 
@@ -1369,7 +1398,7 @@ class LinuxlikeTests(BasePlatformTests):
         see: https://github.com/mesonbuild/meson/issues/9000
              https://stackoverflow.com/questions/48532868/gcc-library-option-with-a-colon-llibevent-a
         '''
-        testdir = os.path.join(self.unit_test_dir, '98 link full name','libtestprovider')
+        testdir = os.path.join(self.unit_test_dir, '97 link full name','libtestprovider')
         oldprefix = self.prefix
         # install into installdir without using DESTDIR
         installdir = self.installdir
@@ -1382,7 +1411,7 @@ class LinuxlikeTests(BasePlatformTests):
         self.new_builddir()
         env = {'LIBRARY_PATH': os.path.join(installdir, self.libdir),
                'PKG_CONFIG_PATH': _prepend_pkg_config_path(os.path.join(installdir, self.libdir, 'pkgconfig'))}
-        testdir = os.path.join(self.unit_test_dir, '98 link full name','proguser')
+        testdir = os.path.join(self.unit_test_dir, '97 link full name','proguser')
         self.init(testdir,override_envvars=env)
 
         # test for link with full path
@@ -1788,7 +1817,7 @@ class LinuxlikeTests(BasePlatformTests):
 
     @skipUnless(is_linux() or is_osx(), 'Test only applicable to Linux and macOS')
     def test_install_strip(self):
-        testdir = os.path.join(self.unit_test_dir, '104 strip')
+        testdir = os.path.join(self.unit_test_dir, '103 strip')
         self.init(testdir)
         self.build()
 
@@ -1835,7 +1864,7 @@ class LinuxlikeTests(BasePlatformTests):
             self.assertFalse(cpp.compiler_args([f'-isystem{symlink}' for symlink in default_symlinks]).to_native())
 
     def test_freezing(self):
-        testdir = os.path.join(self.unit_test_dir, '111 freeze')
+        testdir = os.path.join(self.unit_test_dir, '110 freeze')
         self.init(testdir)
         self.build()
         with self.assertRaises(subprocess.CalledProcessError) as e:
@@ -1844,7 +1873,7 @@ class LinuxlikeTests(BasePlatformTests):
 
     @skipUnless(is_linux(), "Ninja file differs on different platforms")
     def test_complex_link_cases(self):
-        testdir = os.path.join(self.unit_test_dir, '115 complex link cases')
+        testdir = os.path.join(self.unit_test_dir, '114 complex link cases')
         self.init(testdir)
         self.build()
         with open(os.path.join(self.builddir, 'build.ninja'), encoding='utf-8') as f:
@@ -1865,5 +1894,102 @@ class LinuxlikeTests(BasePlatformTests):
         self.assertIn('build t13-e1: c_LINKER t13-e1.p/main.c.o | libt12-s1.a libt13-s3.a\n', content)
 
     def test_top_options_in_sp(self):
-        testdir = os.path.join(self.unit_test_dir, '124 pkgsubproj')
+        testdir = os.path.join(self.unit_test_dir, '126 pkgsubproj')
         self.init(testdir)
+
+    def test_unreadable_dir_in_declare_dep(self):
+        testdir = os.path.join(self.unit_test_dir, '125 declare_dep var')
+        tmpdir = Path(tempfile.mkdtemp())
+        self.addCleanup(windows_proof_rmtree, tmpdir)
+        declaredepdir = tmpdir / 'test'
+        declaredepdir.mkdir()
+        try:
+            tmpdir.chmod(0o444)
+            self.init(testdir, extra_args=f'-Ddir={declaredepdir}')
+        finally:
+            tmpdir.chmod(0o755)
+
+    def check_has_flag(self, compdb, src, argument):
+        for i in compdb:
+            if src in i['file']:
+                self.assertIn(argument, i['command'])
+                return
+        self.assertTrue(False, f'Source {src} not found in compdb')
+
+    def test_persp_options(self):
+        if self.backend is not Backend.ninja:
+            raise SkipTest(f'{self.backend.name!r} backend can\'t install files')
+
+        testdir = os.path.join(self.unit_test_dir, '122 persp options')
+
+        with self.subTest('init'):
+            self.init(testdir, extra_args='-Doptimization=1')
+            compdb = self.get_compdb()
+            mainsrc = 'toplevel.c'
+            sub1src = 'sub1.c'
+            sub2src = 'sub2.c'
+            self.check_has_flag(compdb, mainsrc, '-O1')
+            self.check_has_flag(compdb, sub1src, '-O1')
+            self.check_has_flag(compdb, sub2src, '-O1')
+
+        # Set subproject option to O2
+        with self.subTest('set subproject option'):
+            self.setconf(['-Dround=2', '-D', 'sub2:optimization=3'])
+            compdb = self.get_compdb()
+            self.check_has_flag(compdb, mainsrc, '-O1')
+            self.check_has_flag(compdb, sub1src, '-O1')
+            self.check_has_flag(compdb, sub2src, '-O3')
+
+        # Change an already set override.
+        with self.subTest('change subproject option'):
+            self.setconf(['-Dround=3', '-D', 'sub2:optimization=2'])
+            compdb = self.get_compdb()
+            self.check_has_flag(compdb, mainsrc, '-O1')
+            self.check_has_flag(compdb, sub1src, '-O1')
+            self.check_has_flag(compdb, sub2src, '-O2')
+
+        # Set top level option to O3
+        with self.subTest('change main project option'):
+            self.setconf(['-Dround=4', '-D:optimization=3'])
+            compdb = self.get_compdb()
+            self.check_has_flag(compdb, mainsrc, '-O3')
+            self.check_has_flag(compdb, sub1src, '-O1')
+            self.check_has_flag(compdb, sub2src, '-O2')
+
+        # Unset subproject
+        with self.subTest('unset subproject option'):
+            self.setconf(['-Dround=5', '-U', 'sub2:optimization'])
+            compdb = self.get_compdb()
+            self.check_has_flag(compdb, mainsrc, '-O3')
+            self.check_has_flag(compdb, sub1src, '-O1')
+            self.check_has_flag(compdb, sub2src, '-O1')
+
+        # Set global value
+        with self.subTest('set global option'):
+            self.setconf(['-Dround=6', '-D', 'optimization=2'])
+            compdb = self.get_compdb()
+            self.check_has_flag(compdb, mainsrc, '-O3')
+            self.check_has_flag(compdb, sub1src, '-O2')
+            self.check_has_flag(compdb, sub2src, '-O2')
+
+    def test_sanitizers(self):
+        testdir = os.path.join(self.unit_test_dir, '128 sanitizers')
+
+        with self.subTest('no b_sanitize value'):
+            try:
+                out = self.init(testdir)
+                self.assertRegex(out, 'value *: *none')
+            finally:
+                self.wipe()
+
+        for value, expected in { '': 'none',
+                                 'none': 'none',
+                                 'address': 'address',
+                                 'undefined,address': 'address,undefined',
+                                 'address,undefined': 'address,undefined' }.items():
+            with self.subTest('b_sanitize=' + value):
+                try:
+                    out = self.init(testdir, extra_args=['-Db_sanitize=' + value])
+                    self.assertRegex(out, 'value *: *' + expected)
+                finally:
+                    self.wipe()

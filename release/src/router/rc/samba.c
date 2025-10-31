@@ -18,7 +18,7 @@
 /*
  *
  * FreshTomato Firmware
- * Fixes/updates (C) 2018 - 2023 pedro
+ * Fixes/updates (C) 2018 - 2025 pedro
  *
  */
 
@@ -53,7 +53,7 @@ static void start_wsdd(void)
 	stop_wsdd();
 
 	if (!ether_atoe(nvram_safe_get("lan_hwaddr"), ea))
-		f_read("/dev/urandom", ea, sizeof(ea));
+		gen_urandom(NULL, ea, ETHER_ADDR_LEN, 0);
 
 	snprintf(serial, sizeof(serial), "%02x%02x%02x%02x%02x%02x", ea[0], ea[1], ea[2], ea[3], ea[4], ea[5]);
 
@@ -208,10 +208,7 @@ void start_samba(int force)
 	            mode == 2 ? "" : "map to guest = Bad User",
 	            mode == 2 ? "no" : "yes"); /* guest ok */
 
-	fprintf(fp, " load printers = no\n" /* add for Samba printcap issue */
-	            " printing = bsd\n"
-	            " printcap name = /dev/null\n"
-	            " map archive = no\n"
+	fprintf(fp, " map archive = no\n"
 	            " map hidden = no\n"
 	            " map read only = no\n"
 	            " map system = no\n"

@@ -19,7 +19,7 @@
 <title>[<% ident(); %>] Web Server Menu</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="isup.js?rel=<% version(); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 
@@ -162,10 +162,9 @@ function init() {
 <div class="section-title">Status</div>
 <div class="section">
 	<div class="fields">
-		<span id="_nginx_notice"></span>
-		<input type="button" id="_nginx_button">
+		<span id="_nginx_notice"></span><input type="button" id="_nginx_button">
 		<input type="button" id="_nginx_interface" value="Open content in new tab" class="new_window" onclick="window.open('http://'+nvram.lan_ipaddr+':'+nvram.nginx_port)">
-		&nbsp; <img src="spin.gif" alt="" id="spin">
+		&nbsp; <img src="spin.svg" alt="" id="spin">
 	</div>
 </div>
 
@@ -212,7 +211,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href='javascript:toggleVisibility(cprefix,"notes");'><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<li><b> Status Button</b> - Quick Start-Stop Service.</li>

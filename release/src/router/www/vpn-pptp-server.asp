@@ -17,7 +17,7 @@
 <title>[<% ident(); %>] PPTP: Server</title>
 <link rel="stylesheet" type="text/css" href="tomato.css?rel=<% version(); %>">
 <% css(); %>
-<script src="isup.jsz?rel=<% version(); %>"></script>
+<script src="isup.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="isup.js?rel=<% version(); %>"></script>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="interfaces.js?rel=<% version(); %>"></script>
@@ -278,7 +278,16 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">PPTP Server Configuration</div>
+<div class="section-title">Status</div>
+<div class="section">
+	<div class="fields">
+		<span id="_pptpd_notice"></span><input type="button" id="_pptpd_button">&nbsp; <img src="spin.svg" alt="" id="spin">
+	</div>
+</div>
+
+<!-- / / / -->
+
+<div class="section-title"><span class="pptpsvg">&nbsp;</span>PPTP Server Configuration</div>
 <div class="section">
 	<script>
 		createFieldTable('', [
@@ -300,7 +309,6 @@ function init() {
 			{ title: '<a href="http://poptop.sourceforge.net/" class="new_window">Poptop<\/a><br>Custom configuration', name: 'pptpd_custom', type: 'textarea', value: nvram.pptpd_custom }
 		]);
 	</script>
-	<div class="vpn-start-stop"><input type="button" value="" onclick="" id="_pptpd_button">&nbsp; <img src="spin.gif" alt="" id="spin"></div>
 </div>
 
 <!-- / / / -->
@@ -316,7 +324,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href='javascript:toggleVisibility(cprefix,"notes");'><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<li><b>Local IP Address/Netmask</b> - Address to be used at the local end of the tunnelled PPP links between the server and the VPN clients.</li>

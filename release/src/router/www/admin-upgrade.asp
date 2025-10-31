@@ -60,7 +60,7 @@ function upgrade() {
 
 function earlyInit() {
 	E('upgradenotice').style.display = (nvram.remote_upgrade == 1 ? 'none' : 'block');
-	E('afu-size').innerHTML = '&nbsp; '+scaleSize(sysinfo.totalfreeram)+'&nbsp; <small>(aprox. size that can be buffered completely in RAM)<\/small>';
+	E('afu-size').innerHTML = '&nbsp; '+scaleSize(sysinfo.totalfreeram)+'&nbsp; <small>(approx. size that can be buffered completely in RAM)<\/small>';
 /* JFFS2-BEGIN */
 	if (nvram.jffs2_on != 0 && nvram.jffs2_auto_unmount == 0) {
 		E('afu-warn').style.display = 'block';
@@ -131,7 +131,7 @@ function earlyInit() {
 <!-- / / / -->
 
 <div id="afu-progress" style="display:none;margin:auto">
-	<img src="spin.gif" alt="" style="vertical-align:baseline"> &nbsp;<span id="afu-time">0:00</span><br>
+	<img src="spin.svg" alt="" style="vertical-align:baseline"> &nbsp;<span id="afu-time">0:00</span><br>
 	Please wait while the firmware is uploaded &amp; flashed.<br>
 	<b>Warning:</b> Do not interrupt this browser or the router!<br>
 </div>

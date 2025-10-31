@@ -20,6 +20,7 @@ if T.TYPE_CHECKING:
     from ..interpreterbase import TYPE_var, TYPE_kwargs
     from ..programs import OverrideProgram
     from ..dependencies import Dependency
+    from ..options import ElementaryOptionValues
 
 class ModuleState:
     """Object passed to all module methods.
@@ -74,14 +75,14 @@ class ModuleState:
                      required: bool = True,
                      version_func: T.Optional[ProgramVersionFunc] = None,
                      wanted: T.Union[str, T.List[str]] = '', silent: bool = False,
-                     for_machine: MachineChoice = MachineChoice.HOST) -> T.Union[ExternalProgram, build.Executable, OverrideProgram]:
+                     for_machine: MachineChoice = MachineChoice.HOST) -> T.Union[ExternalProgram, build.OverrideExecutable, OverrideProgram]:
         if not isinstance(prog, list):
             prog = [prog]
         return self._interpreter.find_program_impl(prog, required=required, version_func=version_func,
                                                    wanted=wanted, silent=silent, for_machine=for_machine)
 
     def find_tool(self, name: str, depname: str, varname: str, required: bool = True,
-                  wanted: T.Optional[str] = None) -> T.Union['build.Executable', ExternalProgram, 'OverrideProgram']:
+                  wanted: T.Optional[str] = None) -> T.Union[build.OverrideExecutable, ExternalProgram, 'OverrideProgram']:
         # Look in overrides in case it's built as subproject
         progobj = self._interpreter.program_from_overrides([name], [])
         if progobj is not None:
@@ -132,8 +133,8 @@ class ModuleState:
         self._interpreter.func_test(self.current_node, real_args, kwargs)
 
     def get_option(self, name: str, subproject: str = '',
-                   machine: MachineChoice = MachineChoice.HOST) -> T.Union[T.List[str], str, int, bool]:
-        return self.environment.coredata.get_option(OptionKey(name, subproject, machine))
+                   machine: MachineChoice = MachineChoice.HOST) -> ElementaryOptionValues:
+        return self.environment.coredata.optstore.get_value_for(OptionKey(name, subproject, machine))
 
     def is_user_defined_option(self, name: str, subproject: str = '',
                                machine: MachineChoice = MachineChoice.HOST,

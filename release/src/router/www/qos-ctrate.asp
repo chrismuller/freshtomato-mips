@@ -23,7 +23,7 @@
 
 <script>
 
-//	<% nvram('lan_ipaddr,lan1_ipaddr,lan2_ipaddr,lan3_ipaddr,lan_netmask,lan1_netmask,lan2_netmask,lan3_netmask,t_hidelr'); %>
+//	<% nvram('lan_ipaddr,lan_netmask,t_hidelr'); %>
 
 var cprefix = 'qos_ctrate';
 var filterip = [];
@@ -441,7 +441,7 @@ function init() {
 		E('_f_excludemcast').checked = mcastCB = 1;
 
 	if (((c = cookie.get(cprefix+'_filters_vis')) != null) && (c == '1'))
-		toggleVisibility(cprefix, "filters");
+		toggleVisibility(cprefix, 'filters');
 
 	if (((thres = cookie.get(cprefix+'_thres')) == null) || (isNaN(thres *= 1)))
 		thres = 0;
@@ -486,7 +486,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Filters: <small><i><a href="javascript:toggleVisibility(cprefix,'filters');"><span id="sesdiv_filters_showhide">(Show)</span></a></i></small></div>
+<div class="section-title">Filters: <small><i><a href="javascript:toggleVisibility(cprefix,'filters');" id="toggleLink-filters"><span id="sesdiv_filters_showhide">(Show)</span></a></i></small></div>
 <div class="section" id="sesdiv_filters" style="display:none">
 	<script>
 		var c;
