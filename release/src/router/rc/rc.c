@@ -12,8 +12,10 @@
 #include "rc.h"
 
 #if defined(TCONFIG_OPENVPN) || defined(TCONFIG_WIREGUARD)
- #include <sys/socket.h>
  #include <netdb.h>
+ #include <sys/time.h>
+ #include <sys/socket.h>
+ #include <setjmp.h>
 #endif
 
 /* needed by logmsg() */
@@ -24,6 +26,7 @@
 #if defined(TCONFIG_OPENVPN) || defined(TCONFIG_WIREGUARD)
  const char ks_dir[]      = "/tmp/kill-switch";
  const char ks_fqdns_fn[] = "fqdns";
+ static jmp_buf jmp_env;
 #endif
 
 #ifdef DEBUG_RCTEST
@@ -109,14 +112,14 @@ void chains_log_detection(void)
 
 void fix_chain_in_drop(void)
 {
-	char buf[8];
+	char buf[BUF_SIZE_8];
 
 	chains_log_detection();
 
 	/* if logging - readd the logdrop rule at the end of the INPUT chain */
 	if (*chain_in_drop == 'l') {
-		memset(buf, 0, sizeof(buf)); /* reset */
-		snprintf(buf, sizeof(buf), "%s", chain_in_drop);
+		memset(buf, 0, BUF_SIZE_8); /* reset */
+		snprintf(buf, BUF_SIZE_8, "%s", chain_in_drop);
 
 		eval("iptables", "-D", "INPUT", "-j", buf);
 		eval("iptables", "-A", "INPUT", "-j", buf);
@@ -148,19 +151,19 @@ int env2nv(char *env, char *nv)
 /* serialize (re-)starts from GUI, avoid zombies */
 int serialize_restart(char *service, int start)
 {
-	char s[32];
+	char s[BUF_SIZE_32];
 	char *pos;
 	unsigned int index = 0;
 	pid_t pid, pid_rc = getpid();
 
 	/* replace '-' with '_' otherwise exec_service() will fail */
-	memset(s, 0, sizeof(s)); /* reset */
-	strlcpy(s, service, sizeof(s));
+	memset(s, 0, BUF_SIZE_32); /* reset */
+	strlcpy(s, service, BUF_SIZE_32);
 	if ((pos = strstr(s, "-")) != NULL) {
 		index = pos - s;
 		s[index] = '\0';
-		strlcat(s, "_", sizeof(s));
-		strlcat(s, service + index + 1, sizeof(s));
+		strlcat(s, "_", BUF_SIZE_32);
+		strlcat(s, service + index + 1, BUF_SIZE_32);
 	}
 	logmsg(LOG_DEBUG, "*** %s: IN - service: %s %s - PID[rc]: %d", __FUNCTION__, service, (start ? "start" : "stop"), pid_rc);
 
@@ -177,8 +180,8 @@ int serialize_restart(char *service, int start)
 #ifdef TCONFIG_WIREGUARD
 		/* special case: wireguard */
 		if (strncmp(service, "wireguard", 9) == 0) {
-			memset(s, 0, sizeof(s)); /* reset */
-			snprintf(s, sizeof(s), "wg%d", atoi(&service[9]));
+			memset(s, 0, BUF_SIZE_32); /* reset */
+			snprintf(s, BUF_SIZE_32, "wg%d", atoi(&service[9]));
 			if (if_nametoindex(s)) {
 				logmsg(LOG_WARNING, "service: %s already running; interface %s is up", service, s);
 				return 1;
@@ -201,7 +204,7 @@ int serialize_restart(char *service, int start)
 void run_del_firewall_script(const char *infile, char *outfile)
 {
 	FILE *ifp, *ofp;
-	char line[128];
+	char line[BUF_SIZE_128];
 	char *p;
 
 	ifp = fopen(infile, "r");
@@ -216,7 +219,7 @@ void run_del_firewall_script(const char *infile, char *outfile)
 		return;
 	}
 
-	while (fgets(line, sizeof(line), ifp)) {
+	while (fgets(line, BUF_SIZE_128, ifp)) {
 		for (p = line; *p; ++p) {
 			if (*p == '-' && (p[1] == 'A' || p[1] == 'I' || p[1] == 'N')) {
 				p[1] = 'D';
@@ -288,18 +291,18 @@ static int check_string(const char *str, char *out, size_t outlen)
 		/* separate the left and right sides, each must be valid IPv4 */
 		l_len = (size_t)(dash - p);
 		r_len = len - l_len - 1;
-		if ((l_len == 0) || (r_len == 0) || (l_len >= sizeof(ip)) || (r_len >= sizeof(ip)))
+		if ((l_len == 0) || (r_len == 0) || (l_len >= INET_ADDRSTRLEN) || (r_len >= INET_ADDRSTRLEN))
 			return 0;
 
 		/* left side */
-		memset(ip, 0, sizeof(ip)); /* reset */
+		memset(ip, 0, INET_ADDRSTRLEN); /* reset */
 		memcpy(ip, p, l_len);
 		ip[l_len] = '\0';
 		if (inet_pton(AF_INET, ip, &a) != 1)
 			return 0;
 
 		/* right side */
-		memset(ip, 0, sizeof(ip)); /* reset */
+		memset(ip, 0, INET_ADDRSTRLEN); /* reset */
 		memcpy(ip, dash + 1, r_len);
 		ip[r_len] = '\0';
 		if (inet_pton(AF_INET, ip, &b) != 1)
@@ -328,10 +331,10 @@ static int check_string(const char *str, char *out, size_t outlen)
 	while (ip_len > 0 && isspace((unsigned char)p[ip_len - 1]))
 		ip_len--;
 
-	if ((ip_len == 0) || (ip_len >= sizeof(ip)))
+	if ((ip_len == 0) || (ip_len >= INET_ADDRSTRLEN))
 		return 0;
 
-	memset(ip, 0, sizeof(ip)); /* reset */
+	memset(ip, 0, INET_ADDRSTRLEN); /* reset */
 	memcpy(ip, p, ip_len);
 	ip[ip_len] = '\0';
 
@@ -382,6 +385,11 @@ static int eq_ip(const ip_addr *a, const ip_addr *b)
 	return a->family == b->family && strcmp(a->addr, b->addr) == 0;
 }
 
+static void timeout_handler(int sig)
+{
+	longjmp(jmp_env, 1);
+}
+
 /*
  * Resolves a fully qualified domain name to a deduplicated vector of numeric IPv4 and/or IPv6 addresses
  * @param	host		pointer to a domain name
@@ -393,13 +401,12 @@ static int eq_ip(const ip_addr *a, const ip_addr *b)
 static int resolve_fqdn(const char *host, ip_addr **out_addrs, size_t *out_count, int timeout_ms)
 {
 	struct addrinfo hints, *res = NULL, *rp;
-	struct timeval tv_start, tv_now;
+	struct sigaction sa, sa_old;
+	struct itimerval timer, old_timer;
 	char buf[INET6_ADDRSTRLEN];
 	ip_addr *vec = NULL;
-	int dup;
+	int dup, ret;
 	size_t cap = 0, ncap, i;
-	long elapsed_ms;
-	gettimeofday(&tv_start, NULL);
 
 	*out_addrs = NULL;
 	*out_count = 0;
@@ -409,18 +416,40 @@ static int resolve_fqdn(const char *host, ip_addr **out_addrs, size_t *out_count
 	hints.ai_socktype = 0;             /* any */
 	hints.ai_flags    = AI_ADDRCONFIG; /* return only families used locally */
 
-	while (1) {
-		if (getaddrinfo(host, NULL, &hints, &res) == 0)
-			break;
+	/* set the SIGALRM signal handler */
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = timeout_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SIGALRM, &sa, &sa_old);
 
-		gettimeofday(&tv_now, NULL);
-		elapsed_ms = (tv_now.tv_sec - tv_start.tv_sec) * 1000 + (tv_now.tv_usec - tv_start.tv_usec) / 1000;
-		if (elapsed_ms > timeout_ms) {
-			logmsg(LOG_DEBUG, "*** %s: getaddrinfo timeout", __FUNCTION__);
-			return 1; /* timeout */
+	/* set the timer */
+	memset(&timer, 0, sizeof(timer));
+	timer.it_value.tv_sec = 0;
+	timer.it_value.tv_usec = timeout_ms * 1000; /* ms */
+	timer.it_interval.tv_sec = 0;
+	timer.it_interval.tv_usec = 0;
+	setitimer(ITIMER_REAL, &timer, &old_timer);
 
-		}
-		usleep(200 * 1000); /* 200ms */
+	if (setjmp(jmp_env) == 0) {
+		ret = getaddrinfo(host, NULL, &hints, &res);
+
+		/* turn off the timer */
+		memset(&timer, 0, sizeof(timer));
+		setitimer(ITIMER_REAL, &timer, NULL);
+	}
+	else
+		ret = EAI_AGAIN; /* timeout */
+
+	/* restore previous handler and timer */
+	sigaction(SIGALRM, &sa_old, NULL);
+	setitimer(ITIMER_REAL, &old_timer, NULL);
+
+	if (ret == EAI_AGAIN)
+		return 1; /* DNS timeout */
+	else if (ret != 0) {
+		logmsg(LOG_DEBUG, "*** %s: DNS error: %s", __FUNCTION__, gai_strerror(ret));
+		return 2; /* DNS error */
 	}
 
 	for (rp = res; rp != NULL; rp = rp->ai_next) {
@@ -436,8 +465,8 @@ static int resolve_fqdn(const char *host, ip_addr **out_addrs, size_t *out_count
 				continue;
 		}
 #endif
-		memset(buf, 0, sizeof(buf));
-		if (getnameinfo(rp->ai_addr, rp->ai_addrlen, buf, sizeof(buf), NULL, 0, NI_NUMERICHOST) != 0)
+		memset(buf, 0, INET6_ADDRSTRLEN);
+		if (getnameinfo(rp->ai_addr, rp->ai_addrlen, buf, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST) != 0)
 			continue;
 
 		ip_addr cand;
@@ -461,7 +490,7 @@ static int resolve_fqdn(const char *host, ip_addr **out_addrs, size_t *out_count
 				free(vec);
 				freeaddrinfo(res);
 				logmsg(LOG_ERR, "%s: failed to allocate memory for DNS lookup results", __FUNCTION__);
-				return 2;
+				return 3;
 			}
 			vec = nvec;
 			cap = ncap;
@@ -475,7 +504,7 @@ static int resolve_fqdn(const char *host, ip_addr **out_addrs, size_t *out_count
 	if (*out_count == 0) {
 		free(vec);
 		logmsg(LOG_ERR, "%s: no data", __FUNCTION__);
-		return 3; /* no data */
+		return 4; /* no data */
 	}
 
 	*out_addrs = vec;
@@ -490,15 +519,16 @@ void kill_switch(_tf_ipt_write ipt_write)
 #endif
 {
 	FILE *fp = NULL;
-	unsigned int unit, br, rules_count, kd, type1_count;
-	int policy_type, wan_unit, mwan_num, ret;
+	unsigned int unit, br, rules_count, kd, type1_added, type3_exist = 0, type3_err = 0, type3_ok_fp = 0;
+	int policy_type, wan_unit, mwan_num, ret, res;
 	char *enable, *type, *value, *kswitch;
 	char *nv, *nvp, *b, *c, *lan_ip;
 	char wan_prefix[] = "wanXX";
-	char buf[64], buf2[64], val[64], wan_if[16];
-	static char sip[64];
+	char buf[BUF_SIZE_64], buf2[BUF_SIZE_64], val[BUF_SIZE_64], wan_if[BUF_SIZE_16];
+	static char sip[BUF_SIZE_64];
 	size_t n, i, j, dots, count;
 	const char *routing_key, *rgw_key, *iface_fmt;
+	int resolver_timeout = 500; /* timeout 500 ms */
 
 	/* note: this will be eliminated with a global kill-switch */
 	const char* kind[] = {
@@ -516,6 +546,11 @@ void kill_switch(_tf_ipt_write ipt_write)
 
 	/* create kill-switch dir */
 	mkdir_if_none(ks_dir);
+
+	/* open FQDN file for writing */
+	memset(buf, 0, BUF_SIZE_64); /* reset */
+	snprintf(buf, BUF_SIZE_64, "%s/%s", ks_dir, ks_fqdns_fn);
+	fp = fopen(buf, "w");
 
 	/* proceed routing_val */
 	for (i = 0; i < n; i++) {
@@ -569,21 +604,21 @@ void kill_switch(_tf_ipt_write ipt_write)
 						continue;
 
 					/* find WAN IF */
-					memset(wan_if, 0, sizeof(wan_if)); /* reset */
-					snprintf(wan_if, sizeof(wan_if), "%s", get_wanface(wan_prefix));
+					memset(wan_if, 0, BUF_SIZE_16); /* reset */
+					snprintf(wan_if, BUF_SIZE_16, "%s", get_wanface(wan_prefix));
 					if ((!*wan_if) || (strcmp(wan_if, "") == 0))
 						continue;
 
-					memset(val, 0, sizeof(val)); /* reset */
-					snprintf(val, sizeof(val), "%s", value); /* copy IP/domain to buffer */
+					memset(val, 0, BUF_SIZE_64); /* reset */
+					snprintf(val, BUF_SIZE_64, "%s", value); /* copy IP/domain to buffer */
 
 					/* "From Source IP" */
 					if (policy_type == 1) {
 						/* find correct bridge for given IP */
-						type1_count = 0;
+						type1_added = 0;
 						for (br = 0; br < BRIDGE_COUNT; br++) {
-							memset(buf, 0, sizeof(buf)); /* reset */
-							snprintf(buf, sizeof(buf), (br == 0 ? "lan_ipaddr" : "lan%u_ipaddr"), br);
+							memset(buf, 0, BUF_SIZE_64); /* reset */
+							snprintf(buf, BUF_SIZE_64, (br == 0 ? "lan_ipaddr" : "lan%u_ipaddr"), br);
 
 							/* add only for active LAN */
 							lan_ip = nvram_safe_get(buf);
@@ -593,7 +628,7 @@ void kill_switch(_tf_ipt_write ipt_write)
 							/* get first 3 octets from nvram value (it could be IPv4 range!) */
 							dots = 0;
 							j = 0;
-							for (c = val; *c && *c != '-' && j + 1 < sizeof(val); ++c) {
+							for (c = val; *c && *c != '-' && j + 1 < BUF_SIZE_64; ++c) {
 								buf[j++] = *c;
 								if (*c == '.' && ++dots == 3)
 									break;
@@ -601,56 +636,76 @@ void kill_switch(_tf_ipt_write ipt_write)
 							buf[j] = '\0';
 
 							/* get first 3 octets from LAN IP */
-							memset(buf2, 0, sizeof(buf2)); /* reset */
-							snprintf(buf2, sizeof(buf2), "%s", lan_ip);
+							memset(buf2, 0, BUF_SIZE_64); /* reset */
+							snprintf(buf2, BUF_SIZE_64, "%s", lan_ip);
 							if ((c = strrchr(buf2, '.')))
 								*(c + 1) = 0;
 
 							/* only add this IPv4 or IPv4/mask or IPv4 range for the appropriate LAN (ie. 192.168.1) */
 							if (strcmp(buf, buf2) == 0) {
-								memset(sip, 0, sizeof(sip)); /* reset */
+								memset(sip, 0, BUF_SIZE_64); /* reset */
 
 								/* check IP or IP range and prepare mask (if needed, for IP) */
-								ret = check_string(val, sip, sizeof(sip));
+								ret = check_string(val, sip, BUF_SIZE_64);
 								if (ret != 0) { /* only IPv4 or IPv4 range */
-									memset(buf2, 0, sizeof(buf2)); /* reset */
+									memset(buf2, 0, BUF_SIZE_64); /* reset */
 									if (ret == 2) /* IP range */
-										snprintf(buf2, sizeof(buf2), "-m iprange --src-range %s", sip);
+										snprintf(buf2, BUF_SIZE_64, "-m iprange --src-range %s", sip);
 									else
-										snprintf(buf2, sizeof(buf2), "-s %s", sip);
+										snprintf(buf2, BUF_SIZE_64, "-s %s", sip);
 
-									memset(buf, 0, sizeof(buf)); /* reset */
-									snprintf(buf, sizeof(buf), "br%u", br); /* copy brX to buffer */
+									memset(buf, 0, BUF_SIZE_64); /* reset */
+									snprintf(buf, BUF_SIZE_64, "br%u", br); /* copy brX to buffer */
 									logmsg(LOG_INFO, "Kill-Switch: type: %d - add '%s'", policy_type, sip);
 
 									ipt_write("-I FORWARD %s -i %s -o %s -j REJECT --reject-with icmp-port-unreachable\n", buf2, buf, wan_if); /* sip! */
-									type1_count = 1;
+									type1_added = 1;
 								}
 							}
 						}
-						if (type1_count == 1)
+						if (type1_added == 1)
 							rules_count++;
 					}
 
 					/* "To Destination IP" (2) / "To Domain" (3) */
 					else if ((policy_type == 2) || (policy_type == 3)) {
-						memset(buf, 0, sizeof(buf)); /* reset */
-						snprintf(buf, sizeof(buf), iface_fmt, unit); /* find the VPN IF */
+						memset(buf, 0, BUF_SIZE_64); /* reset */
+						snprintf(buf, BUF_SIZE_64, iface_fmt, unit); /* find the VPN IF */
 
-						memset(sip, 0, sizeof(sip)); /* reset */
-						ret = check_string(val, sip, sizeof(sip));
+						memset(sip, 0, BUF_SIZE_64); /* reset */
+						ret = check_string(val, sip, BUF_SIZE_64);
 
 						/* it's FQDN, so no 'sip' */
 						if (!ret) {
+							/* set the flag that type 3 is present */
+							type3_exist = 1;
+
+							/* warn about problem with FQDN file */
+							if (!fp)
+								logmsg(LOG_WARNING, "Kill-Switch: cannot open FQDN file for writing. IP of domain '%s' will not be refreshed periodically", val);
+
 							/* resolve FQDN */
 							ip_addr *addrs = NULL;
 							count = 0;
-							if (resolve_fqdn(val, &addrs, &count, 500) != 0) { /* timeout: 500ms */
-								logmsg(LOG_WARNING, "Kill-Switch: type: %d - can't resolve '%s' (are all WANs down, or did you enter the wrong domain?)", policy_type, val);
+							res = resolve_fqdn(val, &addrs, &count, resolver_timeout);
+							if (res != 0) {
+								logmsg(LOG_WARNING, "Kill-Switch: type: %d - can't resolve '%s' (%s)", policy_type, val, (res == 1 ? "DNS timeout" : res == 2 ? "DNS error" : "resolve_fqdn() error"));
+								/* set the flag that an error occurred */
+								type3_err = 1;
+
+								/* add FQDN, VPN IF, WAN IF and FLAG to file */
+								if (fp)
+									fprintf(fp, "%s %s %s 1\n", val, buf, wan_if); /* FLAG=1: add domain (only for add mode) */
+
 								continue;
-								/* TODO: these FQDNs have to be added ASAP with some script */
+							}
+							else {
+								/* add FQDN, VPN IF, WAN IF and FLAG to file */
+								if (fp)
+									fprintf(fp, "%s %s %s 0\n", val, buf, wan_if); /* FLAG=0: omit domain (only for add mode) */
 							}
 
+							/* OK to add */
 							logmsg(LOG_INFO, "Kill-Switch: type: %d - add '%s'", policy_type, val);
 
 							/* add every resolved IP */
@@ -668,18 +723,6 @@ void kill_switch(_tf_ipt_write ipt_write)
 							}
 							free(addrs);
 							rules_count++;
-
-							/* open FQDN file for writing only if it has not already been opened */
-							if (!fp) {
-								memset(buf2, 0, sizeof(buf2)); /* reset */
-								snprintf(buf2, sizeof(buf2), "%s/%s", ks_dir, ks_fqdns_fn);
-								if (!(fp = fopen(buf2, "w"))) {
-									logmsg(LOG_WARNING, "Kill-Switch: cannot open file for writing: %s (%s). IP of domain '%s' will not be refreshed periodically", buf2, strerror(errno), val);
-									continue;
-								}
-							}
-							/* _always_ add FQDN, VPN IF, WAN IF to file */
-							fprintf(fp, "%s %s %s\n", val, buf, wan_if);
 						}
 						/* it's IPv4 already inspected/prepared by check_string() */
 						else if (ret == 1) {
@@ -700,8 +743,36 @@ void kill_switch(_tf_ipt_write ipt_write)
 		}
 	}
 	/* close FQDN file */
-	if (fp)
+	if (fp) {
 		fclose(fp);
+		type3_ok_fp = 1;
+	}
+
+	/* proceed FQDNs */
+	if (type3_exist) {
+		if (type3_ok_fp) {
+			/* run ks helper 12 minutes past every 2nd hour */
+			logmsg(LOG_INFO, "Kill-Switch: add cron job for FQDNs (type 3)");
+			eval("cru", "a", "kscheck", "12 */2 * * * ks_helper.sh update");
+
+			if (type3_err) {
+				/* run ks helper in special mode to add these FQDNs to FW ASAP */
+				logmsg(LOG_WARNING, "Kill-Switch: add KS-helper to add FQDNs (type 3) to firewall ASAP");
+				xstart("ks_helper.sh", "add");
+			}
+			else {
+				/* if every FQDN is added, kill script */
+				killall("ks_helper.sh", SIGTERM);
+			}
+		}
+		else if (!type3_ok_fp && type3_err)
+			logmsg(LOG_ERR, "Kill-Switch: cannot add FQDNs (type 3) to firewall!");
+	}
+	else {
+		/* if there is no type 3, remove cron and helper (if running) */
+		eval("cru", "d", "kscheck");
+		killall("ks_helper.sh", SIGTERM);
+	}
 }
 
 void run_vpn_firewall_scripts(const char *kind)
@@ -710,7 +781,7 @@ void run_vpn_firewall_scripts(const char *kind)
 	struct stat fs;
 	struct dirent *file;
 	char *fa;
-	char buf[64];
+	char buf[BUF_SIZE_64];
 
 	if (chdir((strcmp(kind, "wg") == 0 ? WG_FW_DIR : OVPN_FW_DIR)))
 		return;
@@ -725,9 +796,9 @@ void run_vpn_firewall_scripts(const char *kind)
 		if ((fa[0] == '.') || (strcmp(fa, (strcmp(kind, "wg") == 0 ? WG_DIR_DEL_SCRIPT : OVPN_DEL_SCRIPT)) == 0))
 			continue;
 
-		memset(buf, 0, sizeof(buf));
-		snprintf(buf, sizeof(buf), "%s/", (strcmp(kind, "wg") == 0 ? WG_FW_DIR : OVPN_FW_DIR));
-		strlcat(buf, fa, sizeof(buf));
+		memset(buf, 0, BUF_SIZE_64);
+		snprintf(buf, BUF_SIZE_64, "%s/", (strcmp(kind, "wg") == 0 ? WG_FW_DIR : OVPN_FW_DIR));
+		strlcat(buf, fa, BUF_SIZE_64);
 
 		/* check exe permission (in case vpnrouting.sh is still working on routing file) */
 		stat(buf, &fs);
@@ -880,13 +951,13 @@ int main(int argc, char **argv)
 	}
 
 	if (nvram_match("debug_ovrc", "1")) {
-		char tmp[256];
+		char tmp[BUF_SIZE];
 		char *a[32];
 
 		realpath(argv[0], tmp);
 		if ((strncmp(tmp, "/tmp/", 5) != 0) && (argc < 32)) {
-			memset(tmp, 0, sizeof(tmp));
-			snprintf(tmp, sizeof(tmp), "%s%s", "/tmp/", base);
+			memset(tmp, 0, BUF_SIZE);
+			snprintf(tmp, BUF_SIZE, "%s%s", "/tmp/", base);
 			if (f_exists(tmp)) {
 				cprintf("[rc] override: %s\n", tmp);
 				memcpy(a, argv, argc * sizeof(a[0]));
