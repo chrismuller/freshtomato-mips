@@ -16,10 +16,11 @@
 <% css(); %>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="grid-backup.js?rel=<% version(); %>"></script>
+<script src="grid-backup.js?rel=<% version(); %>"></script>
 
 <script>
 
-//	<% nvram("wk_mode,wk_mode_x,routes_static,dhcpc_33,dhcpc_121,lan_ifname,wan_ifname,wan_iface,dr_lan_rx,dr_wan_rx,wan_proto,mwan_num,t_model_name,os_version"); %>
+//	<% nvram("wk_mode,wk_mode_x,routes_static,dhcpc_33,dhcpc_121,lan_ifname,wan_ifname,wan_iface,dr_lan_rx,dr_wan_rx,wan_proto,mwan_num,t_model_name,os_version,t_model_name,os_version"); %>
 
 //	<% activeroutes(); %>
 
@@ -35,6 +36,7 @@ ara.setup = function() {
 	var i, a;
 
 	this.init('ara-grid', 'sort');
+	this.headerSet(['Destination','Gateway / Next Hop','Subnet Mask','Metric','Interface']);
 	this.headerSet(['Destination','Gateway / Next Hop','Subnet Mask','Metric','Interface']);
 	for (i = 0; i < activeroutes.length; ++i) {
 		a = activeroutes[i];
@@ -276,6 +278,9 @@ function init() {
 <div class="section-title">Static Routing Table</div>
 <div class="section">
 	<div class="tomato-grid" id="ars-grid"></div>
+	<input type="button" value="Backup" id="backup-button" onclick="backupGrid()">
+	<input type="button" value="Restore" id="restore-button" onclick="restoreGrid()">
+	<input type="button" value="Clear Table" id="clear-button" onclick="clearGrid()">
 	<input type="button" value="Backup" id="backup-button" onclick="backupGrid()">
 	<input type="button" value="Restore" id="restore-button" onclick="restoreGrid()">
 	<input type="button" value="Clear Table" id="clear-button" onclick="clearGrid()">
