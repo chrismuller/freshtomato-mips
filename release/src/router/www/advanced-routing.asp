@@ -16,7 +16,6 @@
 <% css(); %>
 <script src="tomato.js?rel=<% version(); %>"></script>
 <script src="grid-backup.js?rel=<% version(); %>"></script>
-<script src="grid-backup.js?rel=<% version(); %>"></script>
 
 <script>
 
