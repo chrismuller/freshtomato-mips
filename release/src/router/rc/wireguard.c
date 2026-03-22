@@ -435,9 +435,11 @@ static void wg_build_firewall(const int unit, const char *port) {
 			}
 		}
 		else if (atoi(getNVRAMVar("wg%d_com", unit)) != 3) { /* other */
-			fprintf(fp, "iptables -A INPUT -p udp --dport %s -j %s\n"
-			            "iptables -A INPUT -i wg%d -j %s\n"
-			            "iptables -A FORWARD -i wg%d -j ACCEPT\n",
+			fprintf(fp, "iptables -t nat -I PREROUTING -p udp --dport %s -j ACCEPT\n"
+			            "iptables -I INPUT -p udp --dport %s -j %s\n"
+			            "iptables -I INPUT -i wg%d -j %s\n"
+			            "iptables -I FORWARD -i wg%d -j ACCEPT\n",
+			            port,
 			            port, chain_in_accept,
 			            unit, chain_in_accept,
 			            unit);
@@ -1129,8 +1131,9 @@ static void wg_init_table(char *iface, char *fwmark)
 				if (nl)
 					*nl = '\0';
 
-				/* skip all default gateways */
-				if ((strncmp(route, "default ", 8) == 0) || (strncmp(route, "0.0.0.0/1 ", 10) == 0) || (strncmp(route, "128.0.0.0/1 ", 12) == 0))
+				/* skip default and other uneeded routes */
+				if ((strncmp(route, "default ", 8) == 0) || (strncmp(route, "0.0.0.0/1 ", 10) == 0) ||
+				    (strncmp(route, "128.0.0.0/1 ", 12) == 0) || (strstr(route, "proto mwwatchdog")))
 					continue;
 
 				/* skip iface from vpn_ifaces[] */
