@@ -1,4 +1,4 @@
-/* dnsmasq is Copyright (c) 2000-2025 Simon Kelley
+/* dnsmasq is Copyright (c) 2000-2026 Simon Kelley
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -1384,8 +1384,6 @@ static void sig_handler(int sig)
 		  read_write(daemon->pipe_to_parent, (unsigned char *)(daemon->header_to_tcp), daemon->plen_to_tcp, RW_WRITE);
 		  read_write(daemon->pipe_to_parent, (unsigned char *)(&daemon->forward_to_tcp), sizeof(daemon->forward_to_tcp), RW_WRITE);
 		  read_write(daemon->pipe_to_parent, (unsigned char *)(&daemon->forward_to_tcp->uid), sizeof(daemon->forward_to_tcp->uid), RW_WRITE);
-
-		  my_syslog(LOG_INFO, _("TCP process for DNSSEC validation timed out"));
 
 		  _exit(0);
 		}

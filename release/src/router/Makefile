@@ -1342,7 +1342,10 @@ nettle: nettle/stamp-h1
 nettle-clean:
 	-@$(MAKE) -C nettle clean
 	@rm -f nettle/stamp-h1
-	@rm -rf nettle/include nettle/lib nettle/bin nettle/share
+	@rm -rf nettle/include nettle/bin nettle/share
+ifneq ($(TCONFIG_BCMARM),y)
+	@rm -rf nettle/lib
+endif
 
 dnsmasq:
 	@$(SEP)
@@ -1562,7 +1565,7 @@ ntfs-3g/Makefile:
 	$(call patch_files,ntfs-3g)
 	cd ntfs-3g && autoreconf -fsi && \
 		CFLAGS="-Os -Wall $(EXTRACFLAGS) -ffunction-sections -fdata-sections -fPIC $(OPTSIZE_FLAG)" \
-		LDFLAGS="-ffunction-sections -fdata-sections -Wl,--gc-sections -fPIC" \
+		LDFLAGS="-ffunction-sections -fdata-sections -Wl,--gc-sections -ldl -fPIC" \
 		$(CONFIGURE) $(if $(TCONFIG_BCMARM),,ac_cv_func_utimensat=no) --enable-shared=no --enable-static=no \
 			--disable-library --disable-ldconfig --disable-mount-helper --with-fuse=internal \
 			--disable-ntfsprogs --disable-crypto --without-uuid \
@@ -1879,11 +1882,11 @@ sqlite: sqlite/Makefile
 
 sqlite-install:
 ifeq ($(or $(TCONFIG_NGINX),$(TCONFIG_MEDIA_SERVER)),y)
-	install -D sqlite/staged/usr/lib/libsqlite3.so.3.51.3 $(INSTALLDIR)/sqlite/usr/lib/libsqlite3.so.3.51.3
-	$(STRIP) $(INSTALLDIR)/sqlite/usr/lib/libsqlite3.so.3.51.3
+	install -D sqlite/staged/usr/lib/libsqlite3.so.3.53.0 $(INSTALLDIR)/sqlite/usr/lib/libsqlite3.so.3.53.0
+	$(STRIP) $(INSTALLDIR)/sqlite/usr/lib/libsqlite3.so.3.53.0
 	cd $(INSTALLDIR)/sqlite/usr/lib/ && \
-		ln -sf libsqlite3.so.3.51.3 libsqlite3.so.0 && \
-		ln -sf libsqlite3.so.3.51.3 libsqlite3.so
+		ln -sf libsqlite3.so.3.53.0 libsqlite3.so.0 && \
+		ln -sf libsqlite3.so.3.53.0 libsqlite3.so
 endif
 	@true
 
@@ -2487,9 +2490,9 @@ libxml2: libxml2/static/Makefile libxml2/build/Makefile
 
 libxml2-install:
 ifeq ($(TCONFIG_BCMARM),y)
-	install -D libxml2/staged/usr/lib/libxml2.so.16.1.2 $(INSTALLDIR)/libxml2/usr/lib/libxml2.so.16.1.2
-	$(STRIP) $(INSTALLDIR)/libxml2/usr/lib/libxml2.so.16.1.2
-	cd $(INSTALLDIR)/libxml2/usr/lib && ln -sf libxml2.so.16.1.2 libxml2.so.16 && ln -sf libxml2.so.16.1.2 libxml2.so
+	install -D libxml2/staged/usr/lib/libxml2.so.16.1.3 $(INSTALLDIR)/libxml2/usr/lib/libxml2.so.16.1.3
+	$(STRIP) $(INSTALLDIR)/libxml2/usr/lib/libxml2.so.16.1.3
+	cd $(INSTALLDIR)/libxml2/usr/lib && ln -sf libxml2.so.16.1.3 libxml2.so.16 && ln -sf libxml2.so.16.1.3 libxml2.so
 else
 	install -D libxml2/staged/usr/lib/libxml2.so.2.13.7 $(INSTALLDIR)/libxml2/usr/lib/libxml2.so.2.13.7
 	$(STRIP) $(INSTALLDIR)/libxml2/usr/lib/libxml2.so.2.13.7
@@ -2528,9 +2531,9 @@ libpng: libpng/build/Makefile
 	@$(MAKE) -C libpng/build DESTDIR=$(TOP)/libpng/staged install
 
 libpng-install:
-	install -D libpng/build/libpng16.so.16.56.0 $(INSTALLDIR)/libpng/usr/lib/libpng16.so.16.56.0
-	$(STRIP) $(INSTALLDIR)/libpng/usr/lib/libpng16.so.16.56.0
-	cd $(INSTALLDIR)/libpng/usr/lib && ln -sf libpng16.so.16.56.0 libpng16.so && ln -sf libpng16.so.16.56.0 libpng16.so.16
+	install -D libpng/build/libpng16.so.16.58.0 $(INSTALLDIR)/libpng/usr/lib/libpng16.so.16.58.0
+	$(STRIP) $(INSTALLDIR)/libpng/usr/lib/libpng16.so.16.58.0
+	cd $(INSTALLDIR)/libpng/usr/lib && ln -sf libpng16.so.16.58.0 libpng16.so && ln -sf libpng16.so.16.58.0 libpng16.so.16
 
 libpng-clean:
 	@rm -rf libpng/build
@@ -3831,6 +3834,7 @@ libdaemon-clean:
 	@rm -f libdaemon/stamp-h1
 
 expat/static/Makefile:
+	$(call patch_files,expat)
 	@rm -rf expat/static && mkdir -p expat/static
 	cd expat/static && $(call CMAKE_CrossOptions, crosscompiled.cmake) && \
 		cmake -DCMAKE_TOOLCHAIN_FILE=crosscompiled.cmake \
@@ -3847,6 +3851,9 @@ expat/static/Makefile:
 			-DEXPAT_NS=OFF \
 			-DEXPAT_MIN_SIZE=ON \
 			-DEXPAT_SHARED_LIBS=OFF \
+			-DEXPAT_WITH_ARC4RANDOM=OFF \
+			-DEXPAT_WITH_ARC4RANDOM_BUF=OFF \
+			-DEXPAT_WITH_GETENTROPY=OFF \
 			..
 
 expat/build/Makefile:
@@ -3865,6 +3872,9 @@ expat/build/Makefile:
 			-DEXPAT_DTD=OFF \
 			-DEXPAT_NS=OFF \
 			-DEXPAT_MIN_SIZE=ON \
+			-DEXPAT_WITH_ARC4RANDOM=OFF \
+			-DEXPAT_WITH_ARC4RANDOM_BUF=OFF \
+			-DEXPAT_WITH_GETENTROPY=OFF \
 			..
 
 expat: expat/static/Makefile expat/build/Makefile
@@ -3874,13 +3884,14 @@ expat: expat/static/Makefile expat/build/Makefile
 	@$(MAKE) -C expat/build DESTDIR=$(TOP)/expat/staged install
 
 expat-install:
-	install -D expat/build/libexpat.so.1.11.3 $(INSTALLDIR)/expat/usr/lib/libexpat.so.1.11.3
-	cd $(INSTALLDIR)/expat/usr/lib && $(STRIP) libexpat.so.1.11.3 && ln -sf libexpat.so.1.11.3 libexpat.so.1
+	install -D expat/build/libexpat.so.1.12.0 $(INSTALLDIR)/expat/usr/lib/libexpat.so.1.12.0
+	cd $(INSTALLDIR)/expat/usr/lib && $(STRIP) libexpat.so.1.12.0 && ln -sf libexpat.so.1.12.0 libexpat.so.1
 
 expat-clean:
 	@rm -rf expat/static
 	@rm -rf expat/build
 	@rm -rf expat/staged
+	$(call unpatch_files,expat)
 
 avahi/stamp-h1:
 	$(call patch_files,avahi)

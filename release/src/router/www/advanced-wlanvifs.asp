@@ -1,18 +1,11 @@
 <!DOCTYPE html>
 <!--
-	Tomato GUI
-	Copyright (C) 2006-2007 Jonathan Zarate
-	http://www.polarcloud.com/tomato/
+	FreshTomato GUI
+	Copyright (C) 2018 - 2026 pedro
+	https://freshtomato.org/
 
-	Virtual Wireless Interfaces web interface & extensions
-	Copyright (C) 2012 Augusto Bott
-	http://code.google.com/p/tomato-sdhc-vlan/
-	Some portions Copyright (C) Jean-Yves Avenard
-	mailto:jean-yves@avenard.org
-
-	For use with Tomato Firmware only.
+	For use with FreshTomato Firmware only.
 	No part of this file may be used without permission.
-	LAN Access admin module by Augusto Bott
 -->
 <html lang="en-GB">
 <head>
@@ -26,6 +19,11 @@
 <script src="interfaces.js?rel=<% version(); %>"></script>
 <script src="wireless.js?rel=<% version(); %>"></script>
 <script src="wireless.jsx?_http_id=<% nv(http_id); %>"></script>
+<!-- BCMARM-BEGIN -->
+<script>
+var lastjiffiestotal = 0, lastjiffiesidle = 0, lastjiffiesusage = 100;
+</script>
+<!-- BCMARM-END -->
 <script src="status-data.jsx?_http_id=<% nv(http_id); %>"></script>
 
 <script>
@@ -40,7 +38,11 @@ var max_no_vifs = 0;
 
 var wl_modes_available = [];
 
-var wmo = {'ap':'Access Point','apwds':'Access Point + WDS','sta':'Wireless Client','wet':'Wireless Ethernet Bridge','wds':'WDS'};
+var wmo = {'ap':'Access Point','apwds':'Access Point + WDS','sta':'Wireless Client','wet':'Wireless Ethernet Bridge','wds':'WDS'
+/* BCMWL6-BEGIN */
+	   ,'psta':'Media Bridge'
+/* BCMWL6-END */
+	   };
 var macmode = {'disabled':'Disabled','deny':'Block','allow':'Permit'};
 
 var tabs = [['overview','Overview']];
@@ -472,6 +474,9 @@ REMOVE-END */
 	var lan3_ifnames = nvram['lan3_ifnames'];
 	var wl0_vifs = nvram['wl0_vifs'];
 	var wl1_vifs = nvram['wl1_vifs'];
+/* BCMARM-BEGIN */
+	var wl2_vifs = nvram['wl2_vifs'];
+/* BCMARM-END */
 
 	for (var vidx = 0; vidx < vifs_deleted.length; ++vidx) {
 		var u = vifs_deleted[vidx];
@@ -488,6 +493,10 @@ REMOVE-END */
 			wl0_vifs = wl0_vifs.replace('wl'+u, '');
 		if (typeof(wl1_vifs) != 'undefined')
 			wl1_vifs = wl1_vifs.replace('wl'+u, '');
+/* BCMARM-BEGIN */
+		if (typeof(wl2_vifs) != 'undefined')
+			wl2_vifs = wl2_vifs.replace('wl'+u, '');
+/* BCMARM-END */
 
 		s += 'nvram unset wl'+u+'_wme\n';
 		s += 'nvram unset wl'+u+'_bss_maxassoc\n';
@@ -504,6 +513,10 @@ REMOVE-END */
 			s += 'nvram set wl0_vifs="'+wl0_vifs+'"\n';
 		if (typeof(wl1_vifs) != 'undefined')
 			s += 'nvram set wl1_vifs="'+wl1_vifs+'"\n';
+/* BCMARM-BEGIN */
+		if (typeof(wl2_vifs) != 'undefined')
+			s += 'nvram set wl2_vifs="'+wl2_vifs+'"\n';
+/* BCMARM-END */
 	}
 	post_pre_submit_form(s);
 }
@@ -517,6 +530,8 @@ function error_pre_submit_form() {
 	footermsg.innerHTML = '<tt>'+escapeText(cmdresult)+'<\/tt>';
 	footermsg.style.display = 'inline';
 
+	cmd = null;
+
 	cmdresult = '';
 }
 
@@ -526,10 +541,12 @@ function post_pre_submit_form(s) {
 
 	cmd = new XmlHttp();
 	cmd.onCompleted = function(text, xml) {
+		cmd = null;
 		form.submit(E('t_fom'), 1);
 	}
 	cmd.onError = function(x) {
 		cmdresult = 'ERROR: '+x;
+		cmd = null;
 		error_pre_submit_form();
 	}
 
@@ -675,13 +692,20 @@ REMOVE-END */
 			}
 		}
 
-		E('wl'+u+'_mode_msg').style.display = (((wmode == 'sta') || (wmode == 'wet')) ? 'inline' : 'none');
+		E('wl'+u+'_mode_msg').style.display = (((wmode == 'sta') || (wmode == 'wet') ||
+/* BCMWL6-BEGIN */
+							(wmode == 'psta') ||
+/* BCMWL6-END */
+							0) ? 'inline' : 'none');
 
 		switch (wmode) {
 			case 'apwds':
 			case 'wds':
 			break;
 			case 'wet':
+/* BCMWL6-BEGIN */
+			case 'psta':
+/* BCMWL6-END */
 			case 'sta':
 				wl_vis[vidx]._f_wl_bcast = 0;
 				if (u.toString().indexOf('.') < 0) {
@@ -836,12 +860,22 @@ REMOVE-END */
 			switch (E('_wl'+u+'_net_mode').value) {
 				case 'mixed':
 				case 'n-only':
+/* BCMWL6-BEGIN */
+				case 'nac-mixed':
+				case 'ac-only':
+/* BCMWL6-END */
+/* RTNPLUS-BEGIN */
+					if ((nphy || acphy) && (a.value == 'tkip') && (sm2.indexOf('wpa') != -1)) {
+/* RTNPLUS-END */
+/* RTNPLUS-NO-BEGIN */
 					if (nphy && (a.value == 'tkip') && (sm2.indexOf('wpa') != -1)) {
-						ferror.set(a, 'TKIP encryption is not supported with WPA / WPA2 in N and AC mode.', quiet || !ok);
+/* RTNPLUS-NO-END */
+						ferror.set(a, 'TKIP encryption is not supported with WPA / WPA2 in N and/or AC mode.', quiet || !ok);
 						ok = 0;
 					}
 					else
 						ferror.clear(a);
+
 				break;
 			}
 
@@ -852,7 +886,11 @@ REMOVE-END */
 		b = E('_f_wl'+u+'_mode');
 		ferror.clear(b);
 
-		if ((wmode == 'sta') || (wmode == 'wet')) {
+		if ((wmode == 'sta') || (wmode == 'wet') ||
+/* BCMWL6-BEGIN */
+		    (wmode == 'psta') ||
+/* BCMWL6-END */
+		    0) {
 			++wlclnt;
 			if (wlclnt > 1) {
 				ferror.set(b, 'Only one wireless interface can be configured in client mode.', quiet || !ok);
@@ -862,6 +900,16 @@ REMOVE-END */
 				ferror.set(a, 'N-only is not supported in wireless client modes, use Auto.', quiet || !ok);
 				ok = 0;
 			}
+/* BCMWL6-BEGIN */
+			else if (a.value == 'nac-mixed') {
+				ferror.set(a, 'N/AC Mixed is not supported in wireless client modes, use Auto.', quiet || !ok);
+				ok = 0;
+			}
+			else if (a.value == 'ac-only') {
+				ferror.set(a, 'AC-only is not supported in wireless client modes, use Auto.', quiet || !ok);
+				ok = 0;
+			}
+/* BCMWL6-END */
 		}
 
 		a = E('_wl'+u+'_wpa_psk');
@@ -906,7 +954,12 @@ REMOVE-END */
 		}
 
 		/* range */
+/* RTNPLUS-BEGIN */
+		a = [['_wpa_gtk_rekey', 0, 2592000], ['_radius_port', 1, 65535]];
+/* RTNPLUS-END */
+/* RTNPLUS-NO-BEGIN */
 		a = [['_wpa_gtk_rekey', 60, 7200], ['_radius_port', 1, 65535]];
+/* RTNPLUS-NO-END */
 		for (i = a.length - 1; i >= 0; --i) {
 			v = a[i];
 			if ((wl_vis[vidx]['_wl'+v[0]]) && (!v_range('_wl'+u+v[0], quiet || !ok, v[1], v[2])))
@@ -994,6 +1047,9 @@ function save() {
 	var w, uidx, wmode, sm2, wradio;
 
 	var i, u, vidx, vif;
+/* BCMWL6-BEGIN */
+	var router_restart = 0;
+/* BCMWL6-END */
 
 	var fom = E('t_fom');
 
@@ -1131,18 +1187,29 @@ REMOVE-END */
 			E('_wl'+u+'_nmode').value = 0;
 			E('_wl'+u+'_nmcsidx').value = -2; /* Legacy Rate */
 			E('_wl'+u+'_nbw').value = 0;
+/* BCMWL6-BEGIN */
+			E('_wl'+u+'_bss_opmode_cap_reqd').value = 0; /* no requirements for joining clients */
+/* BCMWL6-END */
 			switch (E('_wl'+u+'_net_mode').value) {
 				case 'b-only':
 					E('_wl'+u+'_gmode').value = 0;
-				break;
+					break;
 				case 'g-only':
+/* RTNPLUS-BEGIN */
+					E('_wl'+u+'_gmode').value = 2;
+/* RTNPLUS-END */
+/* RTNPLUS-NO-BEGIN */
 					E('_wl'+u+'_gmode').value = 4;
-				break;
+/* RTNPLUS-NO-END */
+/* BCMWL6-BEGIN */
+					E('_wl'+u+'_bss_opmode_cap_reqd').value = 1; /* client must advertise ERP / 11g cap. to be able to join */
+/* BCMWL6-END */
+					break;
 				case 'bg-mixed':
-				break;
+					break;
 				case 'a-only':
 					E('_wl'+u+'_nmcsidx').value = -1; /* Auto */
-				break;
+					break;
 				case 'n-only':
 					if (selectedBand(wl_ifidxx(u)) == '1') { /* 5 GHz */
 						E('_wl'+u+'_nmode').value = -1;
@@ -1153,11 +1220,26 @@ REMOVE-END */
 						E('_wl'+u+'_nmcsidx').value = 32;
 					}
 					E('_wl'+u+'_nreqd').value = 1; /* require 11n support (SDK5) */
-				break;
+/* BCMWL6-BEGIN */
+					E('_wl'+u+'_bss_opmode_cap_reqd').value = 2; /* client must advertise HT / 11n cap. to be able to join */
+/* BCMWL6-END */
+					break;
+/* BCMWL6-BEGIN */
+				case 'nac-mixed': /* only 5 GHz */
+					E('_wl'+u+'_nmode').value = -1; /* Auto */
+					E('_wl'+u+'_nmcsidx').value = -1; /* Auto */
+					E('_wl'+u+'_bss_opmode_cap_reqd').value = 2; /* client must advertise HT / 11n cap. to be able to join */
+					break;
+				case 'ac-only': /* only 5 GHz */
+					E('_wl'+u+'_nmode').value = -1; /* Auto */
+					E('_wl'+u+'_nmcsidx').value = -1; /* Auto */
+					E('_wl'+u+'_bss_opmode_cap_reqd').value = 3; /* client must advertise VHT / 11ac cap. to be able to join */
+					break;
+/* BCMWL6-END */
 				default: /* Auto */
 					E('_wl'+u+'_nmode').value = -1;
 					E('_wl'+u+'_nmcsidx').value = -1;
-				break;
+					break;
 			}
 
 			E('_wl'+u+'_nctrlsb').value = nvram['wl'+u+'_nctrlsb'];
@@ -1175,6 +1257,26 @@ REMOVE-END */
 REMOVE-END */
 		E('_wl'+u+'_key').value = (a) ? a.value : '1';
 	}
+
+/* BCMWL6-BEGIN */
+	for (vidx = 0; vidx < vifs_possible.length; ++vidx) {
+		u = vifs_possible[vidx][0].toString();
+		if (definedVIFidx(u) < 0)
+			continue;
+
+		var check_psta = fom['wl'+u+'_mode'].value;
+
+		if ((check_psta == 'psta') && (nvram['wl'+u+'_mode'] != check_psta))
+			router_restart = 1;
+	}
+
+	if (router_restart) {
+		fom._service.value = '*'; /* special case for Media Bridge mode: restart all */
+	}
+	else {
+		fom._service.value = 'wlgui-restart'; /* always restart wireless */
+	}
+/* BCMWL6-END */
 
 	do_pre_submit_form(fom);
 
@@ -1417,7 +1519,9 @@ function init() {
 					W('<input type="hidden" id="_wl'+u+'_nreqd" name="wl'+u+'_nreqd">');
 					W('<input type="hidden" id="_wl'+u+'_nctrlsb" name="wl'+u+'_nctrlsb">');
 					W('<input type="hidden" id="_wl'+u+'_nbw" name="wl'+u+'_nbw">');
-
+/* BCMWL6-BEGIN */
+					W('<input type="hidden" id="_wl'+u+'_bss_opmode_cap_reqd" name="wl'+u+'_bss_opmode_cap_reqd">');
+/* BCMWL6-END */
 					W('<input type="hidden" id="_wl'+u+'_vifs" name="wl'+u+'_vifs">');
 				}
 /* common to all VIFs */
@@ -1461,12 +1565,19 @@ function init() {
 					null,
 					{ title: '<a href="basic-wfilter.asp" class="new_window">Wireless Filter<\/a>', name: 'f_wl'+u+'_macmode', type: 'select', options: [['disabled','Disable filter on that interface'],['deny','Block clients from the list on that interface'],['allow','Permit only clients from the list on that interface']], value: nvram['wl'+u+'_macmode'] },
 					null,
-					{ title: 'Security', name: 'wl'+u+'_security_mode', type: 'select', options: [['disabled','Disabled'],['wep','WEP'],['wpa_personal','WPA Personal'],['wpa_enterprise','WPA Enterprise'],['wpa2_personal','WPA2 Personal'],['wpa2_enterprise','WPA2 Enterprise'],['wpaX_personal','WPA / WPA2 Personal'],['wpaX_enterprise','WPA / WPA2 Enterprise'],['radius','Radius']], value: nvram['wl'+u+'_security_mode'] },
+					{ title: 'Security', name: 'wl'+u+'_security_mode', type: 'select',
+						options: [['disabled','Disabled'],['wep','WEP (legacy)'],['wpa_personal','WPA Personal (deprecated)'],['wpa_enterprise','WPA Enterprise (deprecated)'],['wpa2_personal','WPA2 Personal'],['wpa2_enterprise','WPA2 Enterprise'],['wpaX_personal','WPA / WPA2 Personal (deprecated)'],['wpaX_enterprise','WPA / WPA2 Enterprise (deprecated)'],['radius','Radius']],
+						value: nvram['wl'+u+'_security_mode'] },
 					{ title: 'Encryption', indent: 2, name: 'wl'+u+'_crypto', type: 'select', options: [['tkip','TKIP'],['aes','AES'],['tkip+aes','TKIP / AES']], value: nvram['wl'+u+'_crypto'] },
-					{ title: 'Shared Key', indent: 2, name: 'wl'+u+'_wpa_psk', type: 'password', maxlen: 64, size: 66, peekaboo: 1,
-						suffix: ' <input type="button" id="_f_wl'+u+'_psk_random1" value="Random" onclick="random_psk(\'_wl'+u+'_wpa_psk\')">', value: nvram['wl'+u+'_wpa_psk'] },
-					{ title: 'Shared Key', indent: 2, name: 'wl'+u+'_radius_key', type: 'password', maxlen: 80, size: 32, peekaboo: 1, suffix: ' <input type="button" id="_f_wl'+u+'_psk_random2" value="Random" onclick="random_psk(\'_wl'+u+'_radius_key\')">', value: nvram['wl'+u+'_radius_key'] },
+					{ title: 'Shared Key', indent: 2, name: 'wl'+u+'_wpa_psk', type: 'password', maxlen: 63, size: 34, peekaboo: 1, placeholder: ' < case sensitive >',
+						suffix: ' <select id="_f_wl'+u+'_psk_random1" onchange="random_psk(\'_wl'+u+'_wpa_psk\', \'_f_wl'+u+'_psk_random1\')" style="width:auto"><option value="default" style="color:grey" selected>Random<\/option><option value="clear">Clear<\/option><option value="8">8 chars<\/option><option value="10">10 chars<\/option><option value="12">12 chars<\/option><option value="14">14 chars<\/option><option value="16">16 chars<\/option><option value="18">18 chars<\/option><option value="24">24 chars<\/option><option value="32">32 chars<\/option><option value="48">48 chars<\/option><option value="63">63 chars<\/option><\/select>', value: nvram['wl'+u+'_wpa_psk'] },
+					{ title: 'Shared Key', indent: 2, name: 'wl'+u+'_radius_key', type: 'password', maxlen: 80, size: 32, peekaboo: 1, placeholder: ' < case sensitive >', suffix: ' <select id="_f_wl'+u+'_psk_random2" onchange="random_psk(\'_wl'+u+'_radius_key\', \'_f_wl'+u+'_psk_random2\')" style="width:auto"><option value="default" style="color:grey" selected>Random<\/option><option value="clear">Clear<\/option><option value="8">8 chars<\/option><option value="10">10 chars<\/option><option value="12">12 chars<\/option><option value="16">16 chars<\/option><option value="24">24 chars<\/option><option value="32">32 chars<\/option><option value="48">48 chars<\/option><option value="63">63 chars<\/option><\/select>', value: nvram['wl'+u+'_radius_key'] },
+/* RTNPLUS-BEGIN */
+					{ title: 'Group Key Renewal', indent: 2, name: 'wl'+u+'_wpa_gtk_rekey', type: 'text', maxlen: 7, size: 9, suffix: '&nbsp; <small>seconds<\/small>', value: (nvram['wl'+u+'_wpa_gtk_rekey'] || '3600') },
+/* RTNPLUS-END */
+/* RTNPLUS-NO-BEGIN */
 					{ title: 'Group Key Renewal', indent: 2, name: 'wl'+u+'_wpa_gtk_rekey', type: 'text', maxlen: 4, size: 6, suffix: '&nbsp; <small>seconds<\/small>', value: (nvram['wl'+u+'_wpa_gtk_rekey'] || '3600') },
+/* RTNPLUS-NO-END */
 					{ title: 'Radius Server', indent: 2, multi: [
 						{ name: 'wl'+u+'_radius_ipaddr', type: 'text', maxlen: 15, size: 17, value: nvram['wl'+u+'_radius_ipaddr'] },
 						{ name: 'wl'+u+'_radius_port', type: 'text', maxlen: 5, size: 7, prefix: ' : ', value: (nvram['wl'+u+'_radius_port'] || '1812') } ] },
