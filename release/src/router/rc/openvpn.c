@@ -23,6 +23,7 @@
 #define LOGMSG_DISABLE	DISABLE_SYSLOG_OSM
 #define LOGMSG_NVDEBUG	"openvpn_debug"
 
+
 typedef enum ovpn_route
 {
 	NONE = 0,
@@ -48,6 +49,53 @@ typedef enum ovpn_type
 	OVPN_TYPE_SERVER = 0,
 	OVPN_TYPE_CLIENT
 } ovpn_type_t;
+
+/*
+ * cstats/IP Traffic uses the xt_account match in the FORWARD chain.
+ * OpenVPN runtime firewall rules are inserted with -I and may ACCEPT VPN
+ * packets before they reach the global cstats rule generated in firewall.c.
+ * Insert a VPN-interface-specific accounting rule immediately above those
+ * early ACCEPT rules. No -j target is used intentionally: the account match
+ * updates counters and packet evaluation continues.
+ */
+static void write_ovpn_cstats_rules(FILE *fp, const char *iface, const char *dir)
+{
+	struct in_addr ipaddr, netmask, network;
+	char lanN_ifname[] = "lanXX_ifname";
+	char lanN_ipaddr[] = "lanXX_ipaddr";
+	char lanN_netmask[] = "lanXX_netmask";
+	char lanN[] = "lanXX";
+	char netaddrnetmask[] = "255.255.255.255/255.255.255.255";
+	char bridge[2];
+	char br;
+
+	if (!nvram_match("cstats_enable", "1"))
+		return;
+
+	for (br = 0; br < BRIDGE_COUNT; br++) {
+		bridge[0] = br ? '0' + br : '\0';
+		bridge[1] = '\0';
+
+		snprintf(lanN_ifname, sizeof(lanN_ifname), "lan%s_ifname", bridge);
+		if (strcmp(nvram_safe_get(lanN_ifname), "") == 0)
+			continue;
+
+		snprintf(lanN_ipaddr, sizeof(lanN_ipaddr), "lan%s_ipaddr", bridge);
+		snprintf(lanN_netmask, sizeof(lanN_netmask), "lan%s_netmask", bridge);
+		snprintf(lanN, sizeof(lanN), "lan%s", bridge);
+
+		if (!inet_aton(nvram_safe_get(lanN_ipaddr), &ipaddr))
+			continue;
+
+		if (!inet_aton(nvram_safe_get(lanN_netmask), &netmask))
+			continue;
+
+		network.s_addr = ipaddr.s_addr & netmask.s_addr;
+		snprintf(netaddrnetmask, sizeof(netaddrnetmask), "%s/%s", inet_ntoa(network), nvram_safe_get(lanN_netmask));
+
+		fprintf(fp, "iptables -I FORWARD %s %s -m account --aaddr %s --aname %s\n", dir, iface, netaddrnetmask, lanN);
+	}
+}
 
 static int ovpn_setup_iface(char *iface, ovpn_if_t iface_type, ovpn_route_t route_mode, int unit, ovpn_type_t type) {
 	char buffer[BUF_SIZE_16];
@@ -518,6 +566,7 @@ void start_ovpn_client(int unit)
 		            iface, (nvi ? chain_in_drop : chain_in_accept),
 		            iface, (nvi ? "DROP" : "ACCEPT"),
 		            iface);
+		write_ovpn_cstats_rules(fp, iface, "-o");
 #ifdef TCONFIG_BCMARM
 		if (!nvram_get_int("ctf_disable")) { /* bypass CTF if enabled */
 			fprintf(fp, "iptables -t mangle -I PREROUTING -i %s -j MARK --set-mark 0x01/0x7\n"
@@ -532,6 +581,20 @@ void start_ovpn_client(int unit)
 #endif
 		}
 #endif /* TCONFIG_BCMARM */
+
+		/* Clamp TCP MSS to PMTU of OpenVPN client interface (IPv4 & IPv6) */
+		if (!nvram_get_int("tcp_clamp_disable")) {
+			fprintf(fp, "iptables -t mangle -I FORWARD -o %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n"
+			            "iptables -t mangle -I FORWARD -i %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n",
+			            iface, iface);
+#ifdef TCONFIG_IPV6
+			if (ipv6_enabled()) {
+				fprintf(fp, "ip6tables -t mangle -I FORWARD -o %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n"
+				            "ip6tables -t mangle -I FORWARD -i %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n",
+				            iface, iface);
+			}
+#endif
+		}
 
 		if (route_mode == NAT) {
 			/* masquerade all client outbound traffic regardless of source subnet */
@@ -1136,6 +1199,7 @@ void start_ovpn_server(int unit)
 			            "iptables -I FORWARD -i %s -j ACCEPT\n",
 			            iface, chain_in_accept,
 			            iface);
+			write_ovpn_cstats_rules(fp, iface, "-i");
 #ifdef TCONFIG_BCMARM
 			if (!nvram_get_int("ctf_disable")) { /* bypass CTF if enabled */
 				fprintf(fp, "iptables -t mangle -I PREROUTING -i %s -j MARK --set-mark 0x01/0x7\n"
@@ -1150,6 +1214,20 @@ void start_ovpn_server(int unit)
 #endif
 			}
 #endif /* TCONFIG_BCMARM */
+
+			/* Clamp TCP MSS to PMTU of OpenVPN server interface (IPv4 & IPv6) */
+			if (!nvram_get_int("tcp_clamp_disable")) {
+				fprintf(fp, "iptables -t mangle -I FORWARD -o %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n"
+				            "iptables -t mangle -I FORWARD -i %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n",
+				            iface, iface);
+#ifdef TCONFIG_IPV6
+				if (ipv6_enabled()) {
+					fprintf(fp, "ip6tables -t mangle -I FORWARD -o %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n"
+					            "ip6tables -t mangle -I FORWARD -i %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n",
+					            iface, iface);
+				}
+#endif
+			}
 		}
 
 		/* Create firewall rules for IPv6 */
