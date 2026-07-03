@@ -1336,6 +1336,7 @@ void start_upnp(void)
 	           "upnp_nat_postrouting_chain=pupnp\n"
 	           "notify_interval=%d\n"
 	           "system_uptime=yes\n"
+	           "ext_allow_private_ipv4=yes\n"
 	           "friendly_name=FreshTomato UPnP IGD &amp; PCP\n"
 	           "model_name=%s\n"
 	           "model_url=https://freshtomato.org/\n"
@@ -1343,8 +1344,7 @@ void start_upnp(void)
 	           "manufacturer_url=https://freshtomato.org/\n"
 	           /* Empty strings so that 1 and 00000000 are not reported */
 	           "model_number=\n"
-	           "serial=\n"
-	           "\n",
+	           "serial=\n",
 	           upnp_port,
 	           (enable & 1) ? "yes" : "no",			/* upnp enable */
 	           (enable & 2) ? "yes" : "no",			/* pcp_pmp enable */
@@ -1392,7 +1392,7 @@ void start_upnp(void)
 				fprintf(f, "allow 1024-65535 %s/%s 1024-65535\n", lanip, lanmask);
 		}
 	}
-	fprintf(f, "\ndeny 0-65535 0.0.0.0/0 0-65535\n");
+	fprintf(f, "deny 0-65535 0.0.0.0/0 0-65535\n");
 
 	fclose(f);
 
@@ -2005,6 +2005,9 @@ void start_ntpd(void)
 
 			if (nvram_get_int("ntpd_enable")) /* enable local NTP server */
 				ntpd_argv[index++] = "-l";
+
+			/* add daily restart to cron */
+			eval("cru", "a", "ntpd_restart", "11 4 * * * /sbin/ntpd_restart");
 		}
 
 		ret = _eval(ntpd_argv, NULL, 0, NULL);
@@ -2023,6 +2026,9 @@ void stop_ntpd(void)
 {
 	if (serialize_restart("ntpd", 0))
 		return;
+
+	/* always try to remove from cron */
+	eval("cru", "d", "ntpd_restart");
 
 	pid_ntpd = -1;
 	if (pidof("ntpd") > 0) {
@@ -2095,6 +2101,14 @@ int ntpd_synced_main(int argc, char *argv[])
 
 	fprintf(file,"%s", message);
 	fclose(file);
+	return 0;
+}
+
+int ntpd_restart_main(int argc, char *argv[])
+{
+	logmsg(LOG_INFO, "ntpd: daily service restart");
+	stop_ntpd();
+	start_ntpd();
 	return 0;
 }
 

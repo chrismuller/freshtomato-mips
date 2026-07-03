@@ -1523,8 +1523,7 @@ libnfnetlink-clean:
 miniupnpd/stamp-h1:
 	$(call patch_files,miniupnpd)
 	cd miniupnpd && \
-		PKG_CONFIG_LIBDIR="" \
-		./configure --igd2 --leasefile --vendorcfg --portinuse --disable-pppconn --firewall=iptables --iptablespath=$(TOP)/$(IPTABLES_TARGET) $(if $(TCONFIG_IPV6),--ipv6,)
+		./configure --igd2 --leasefile --vendorcfg --portinuse --disable-pppconn --firewall=iptables --disable-tests --iptablespath=$(TOP)/$(IPTABLES_TARGET) $(if $(TCONFIG_IPV6),--ipv6,)
 	@touch $@
 
 miniupnpd: miniupnpd/stamp-h1
@@ -1539,8 +1538,7 @@ miniupnpd-install:
 
 miniupnpd-clean:
 	-@$(MAKE) -C miniupnpd clean
-	@rm -f miniupnpd/config.h
-	@rm -f miniupnpd/stamp-h1
+	@rm -f miniupnpd/config.h miniupnpd/stamp-h1
 	$(call unpatch_files,miniupnpd)
 
 vsftpd:
@@ -3854,6 +3852,7 @@ expat/static/Makefile:
 			-DEXPAT_WITH_ARC4RANDOM=OFF \
 			-DEXPAT_WITH_ARC4RANDOM_BUF=OFF \
 			-DEXPAT_WITH_GETENTROPY=OFF \
+			-DEXPAT_DEV_URANDOM=ON \
 			..
 
 expat/build/Makefile:
@@ -3875,6 +3874,7 @@ expat/build/Makefile:
 			-DEXPAT_WITH_ARC4RANDOM=OFF \
 			-DEXPAT_WITH_ARC4RANDOM_BUF=OFF \
 			-DEXPAT_WITH_GETENTROPY=OFF \
+			-DEXPAT_DEV_URANDOM=ON \
 			..
 
 expat: expat/static/Makefile expat/build/Makefile
@@ -3884,8 +3884,8 @@ expat: expat/static/Makefile expat/build/Makefile
 	@$(MAKE) -C expat/build DESTDIR=$(TOP)/expat/staged install
 
 expat-install:
-	install -D expat/build/libexpat.so.1.12.1 $(INSTALLDIR)/expat/usr/lib/libexpat.so.1.12.1
-	cd $(INSTALLDIR)/expat/usr/lib && $(STRIP) libexpat.so.1.12.1 && ln -sf libexpat.so.1.12.1 libexpat.so.1
+	install -D expat/build/libexpat.so.1.12.2 $(INSTALLDIR)/expat/usr/lib/libexpat.so.1.12.2
+	cd $(INSTALLDIR)/expat/usr/lib && $(STRIP) libexpat.so.1.12.2 && ln -sf libexpat.so.1.12.2 libexpat.so.1
 
 expat-clean:
 	@rm -rf expat/static

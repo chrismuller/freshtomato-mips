@@ -37,7 +37,7 @@
 #endif
 
 #define VERSION			"2.2"
-#define AGENT			"Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/109.0"
+#define AGENT			"curl/8.20.0"
 #define MAX_OPTION_LENGTH	256
 #define BLOB_SIZE		(4 * 1024)
 #define HALF_BLOB		(BLOB_SIZE >> 1)
@@ -114,12 +114,9 @@ static void route_adddel(const char *ip, unsigned int add)
 	if (ifname[0] != '\0' && nvram_get_int("mwan_num") > 1) { /* only for MultiWAN */
 		logmsg(LOG_DEBUG, "*** IN %s: add=[%d] ip=[%s] ifname=[%s] - %s routes ...", __FUNCTION__, add, ip, ifname, (add ? "adding" : "deleting"));
 
-		memset(buf, 0, sizeof(buf)); /* reset */
 		strlcpy(buf, "/tmp/ppp/pppd", sizeof(buf));
 		strlcat(buf, sPrefix, sizeof(buf));
 		if (!f_exists(buf)) { /* not pppd */
-			memset(buf, 0, sizeof(buf)); /* reset */
-			memset(buf2, 0, sizeof(buf2)); /* reset */
 			strlcpy(buf, sPrefix, sizeof(buf));
 			strlcat(buf, "_gateway", sizeof(buf));
 			snprintf(buf2, sizeof(buf2), "via %s", nvram_safe_get(buf)); /* gateway_fragment */
@@ -130,17 +127,15 @@ static void route_adddel(const char *ip, unsigned int add)
 		system("ip route | grep default | cut -d' ' -f2- > " MDU_ROUTE_FN);
 		memset(buf, 0, sizeof(buf)); /* reset */
 		if (f_read_string(MDU_ROUTE_FN, buf, sizeof(buf)) > 2) { /* default_route_fragment */
-			memset(cmd, 0, sizeof(cmd)); /* reset */
 			if ((size_t)snprintf(cmd, sizeof(cmd), "ip route %s %s %s", (add ? "add" : "del"), ip, buf) >= sizeof(cmd))
-				logmsg(LOG_WARNING, "*** %s: route cmd truncated", __FUNCTION__);
+				logmsg(LOG_ERR, "%s: route cmd truncated", __FUNCTION__);
 
 			logmsg(LOG_DEBUG, "*** %s: cmd=%s", __FUNCTION__, cmd);
 			system(cmd);
 		}
 
-		memset(cmd, 0, sizeof(cmd)); /* reset */
 		if ((size_t)snprintf(cmd, sizeof(cmd), "ip route %s %s dev %s %s metric 50000", (add ? "add" : "del"), ip, ifname, buf2) >= sizeof(cmd))
-			logmsg(LOG_WARNING, "*** %s: route cmd truncated", __FUNCTION__);
+			logmsg(LOG_ERR, "%s: route cmd truncated", __FUNCTION__);
 
 		logmsg(LOG_DEBUG, "*** %s: cmd=%s", __FUNCTION__, cmd);
 		system(cmd);
@@ -263,7 +258,7 @@ static const char *get_option_required(const char *name)
 	if ((p = get_option(name)) != NULL)
 		return p;
 
-	logmsg(LOG_DEBUG, "required option --%s is missing", name);
+	logmsg(LOG_ERR, "required option --%s is missing", name);
 	fprintf(stderr, "Required option --%s is missing.\n", name);
 
 	exit(2);
@@ -285,7 +280,7 @@ static int get_option_onoff(const char *name, int def)
 	if ((strcmp(p, "off") == 0) || (strcmp(p, "0") == 0))
 		return 0;
 
-	logmsg(LOG_DEBUG, "--%s requires the value off/on or 0/1", name);
+	logmsg(LOG_ERR, "--%s requires the value off/on or 0/1", name);
 	fprintf(stderr, "--%s requires the value off/on or 0/1.\n", name);
 
 	exit(2);
@@ -418,10 +413,21 @@ static int curl_dump_cb(CURL *handle, curl_infotype type, char *data, size_t siz
 
 static void curl_cleanup()
 {
-	if (curl_dfile)
-		fclose(curl_dfile);
+	if (headers) {
+		curl_slist_free_all(headers);
+		headers = NULL;
+	}
 
-	curl_easy_cleanup(curl_handle);
+	if (curl_dfile) {
+		fclose(curl_dfile);
+		curl_dfile = NULL;
+	}
+
+	if (curl_handle) {
+		curl_easy_cleanup(curl_handle);
+		curl_handle = NULL;
+	}
+
 	curl_global_cleanup();
 }
 
@@ -443,6 +449,11 @@ static void curl_setup(const unsigned int ssl)
 		error("libcurl initialization failure.");
 
 #ifndef TCONFIG_STUBBY
+	/*
+	 * This build does not ship a CA bundle/store, so certificate verification
+	 * cannot be enabled here. Builds with CA support rely on libcurl defaults:
+	 * CURLOPT_SSL_VERIFYPEER=1 and CURLOPT_SSL_VERIFYHOST=2.
+	 */
 	curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
 #endif
 	curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
@@ -472,49 +483,68 @@ static void curl_setup(const unsigned int ssl)
 
 static struct curl_slist *curl_headers(const char *header)
 {
-	char *sub = NULL;
-	struct curl_slist *tmp = NULL;
-	size_t n = strlen(header);
+	const char *start, *end;
+	struct curl_slist *tmp;
+	char *line;
+	size_t line_len;
+
 	headers = NULL;
 
 	if (!header)
 		return NULL;
 
-	sub = strstr(header, "\r\n");
-	while (sub || (n > 0)) {
-		if (sub)
-			sub = NULL;
-		if (header) {
-			tmp = curl_slist_append(headers, header);
+	start = header;
+	while (*start) {
+		end = strchr(start, '\n');
+		if (end)
+			line_len = end - start;
+		else
+			line_len = strlen(start);
+
+		if (line_len && (start[line_len - 1] == '\r'))
+			line_len--;
+
+		if (line_len) {
+			line = malloc(line_len + 1);
+			if (!line) {
+				curl_cleanup();
+				error(M_ERROR_MEM_ALLOC);
+			}
+
+			memcpy(line, start, line_len);
+			line[line_len] = '\0';
+
+			tmp = curl_slist_append(headers, line);
+			free(line);
 			if (tmp == NULL) {
-				curl_slist_free_all(headers);
 				curl_cleanup();
 				error("libcurl header failure.");
 			}
-		}
-		if (sub) {
-			n -= sub + 2 - header;
-			headers = tmp;
-			header = sub + 2;
-			*sub = '\r';
-			sub = strstr(header, "\r\n");
-		}
-		else {
-			n = 0;
+
 			headers = tmp;
 		}
+
+		if (!end)
+			break;
+
+		start = end + 1;
 	}
 
 	return headers;
 }
 
-static char *curl_resolve_ip(const unsigned int ssl, const char *url, const char *header)
+static int curl_resolve_ip(const unsigned int ssl, const char *url, const char *header, char *ip_buf, size_t ip_buf_sz)
 {
-	char *ip;
+	char *ip = NULL;
 	CURLcode r;
 	int trys, stop = 0;
-	unsigned int ok = 0;
+	int ok = 0;
 	headers = NULL;
+
+	if ((!ip_buf) || (ip_buf_sz == 0))
+		return -1;
+
+	ip_buf[0] = '\0';
 
 	curl_setup(ssl);
 
@@ -540,23 +570,25 @@ static char *curl_resolve_ip(const unsigned int ssl, const char *url, const char
 		sleep(2);
 	}
 
-	if (((r == CURLE_OK) || (r == CURLE_RECV_ERROR)) && !curl_easy_getinfo(curl_handle, CURLINFO_PRIMARY_IP, &ip) && ip) /* CURLE_RECV_ERROR needed for clouflare */
-		ok = 1;
+	if (((r == CURLE_OK) || (r == CURLE_RECV_ERROR)) && !curl_easy_getinfo(curl_handle, CURLINFO_PRIMARY_IP, &ip) && ip) { /* CURLE_RECV_ERROR needed for clouflare */
+		if (strlcpy(ip_buf, ip, ip_buf_sz) < ip_buf_sz)
+			ok = 1;
+		else
+			logmsg(LOG_ERR, "%s: resolved IP truncated", __FUNCTION__);
+	}
 	else {
-		memset(curl_err_str, 0, sizeof(curl_err_str));
 		snprintf(curl_err_str, sizeof(curl_err_str), "libcurl error (%d) - %s.", r, (strlen(errbuf) ? errbuf : curl_easy_strerror(r)));
-		logmsg(LOG_DEBUG, "*** %s: error - (%s)", __FUNCTION__, curl_err_str);
+		logmsg(LOG_ERR, "%s: error - (%s)", __FUNCTION__, curl_err_str);
 	}
 
-	curl_slist_free_all(headers);
 	curl_cleanup();
 
 	if (stop == 1)
 		error("Force stop.");
 
-	logmsg(LOG_DEBUG, "*** %s: OUT IP=[%s]", __FUNCTION__, (ok ? ip : "unknown"));
+	logmsg(LOG_DEBUG, "*** %s: OUT IP=[%s]", __FUNCTION__, (ok ? ip_buf : "unknown"));
 
-	return ok ? ip : "0";
+	return ok ? 0 : -1;
 }
 #endif /* USE_LIBCURL */
 
@@ -573,7 +605,6 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 	FILE *curl_rbuf = NULL;
 	char url[HALF_BLOB];
 	char ip[INET6_ADDRSTRLEN];
-	char *ip_ret;
 	CURLcode r;
 	int trys;
 	int stop = 0;
@@ -584,19 +615,15 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 		host = get_option_or("server", host);
 
 	/* build URL */
-	memset(url, 0, HALF_BLOB); /* reset */
 	if (snprintf(url, sizeof(url), "%s%s", host, query) >= (int)sizeof(url))
-		logmsg(LOG_WARNING, "*** %s: URL truncated", __FUNCTION__);
+		logmsg(LOG_ERR, "%s: URL truncated", __FUNCTION__);
 
-	memset(ip, 0, sizeof(ip)); /* reset */
+	ip[0] = '\0';
 	/* resolve IP for routing if MultiWAN */
 	if (ifname[0] != '\0') {
 		logmsg(LOG_DEBUG, "*** %s: resolving IP of server %s ...", __FUNCTION__, host);
-		ip_ret = curl_resolve_ip(ssl, url, header);
-		if (strcmp(ip_ret, "0") != 0) {
-			strlcpy(ip, ip_ret, INET6_ADDRSTRLEN); /* copy as it will be reused in the next request */
+		if (curl_resolve_ip(ssl, url, header, ip, sizeof(ip)) == 0)
 			logmsg(LOG_DEBUG, "*** %s: resolved IP=[%s]", __FUNCTION__, ip);
-		}
 		else
 			return code; /* couldn't resolve */
 	}
@@ -681,9 +708,8 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 		/* body is pointer into global blob - caller must NOT free it */
 	}
 	else {
-		memset(curl_err_str, 0, sizeof(curl_err_str));
 		snprintf(curl_err_str, sizeof(curl_err_str), "libcurl error (%d) - %s.", r, errbuf[0] ? errbuf : curl_easy_strerror(r));
-		logmsg(LOG_DEBUG, "*** %s: error - %s", __FUNCTION__, curl_err_str);
+		logmsg(LOG_ERR, "%s: error - %s", __FUNCTION__, curl_err_str);
 	}
 
 	fclose(curl_wbuf);
@@ -695,7 +721,6 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 		fflush(curl_dfile);
 	}
 
-	curl_slist_free_all(headers);
 	curl_cleanup();
 
 	if (stop)
@@ -708,9 +733,13 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 	char *request = NULL;
 	char *httpv, *colon, *body_start;
 	int port;
-	char a[512], b[512], authbuf[512];
+	char a[512];
+	char *authbuf, *auth64;
+	const char *user, *pass;
+	size_t user_len, pass_len, auth_len, auth64_len;
 	const char *c_ip, *c;
 	long i;
+	int request_truncated = 0;
 	struct addrinfo hints;
 	struct addrinfo *result, *rp;
 	struct timeval tv;
@@ -727,56 +756,114 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 		host = get_option_or("server", host);
 
 	/* build request header */
-	strlcpy(a, req, sizeof(a));
-	strlcat(a, " ", sizeof(a));
-	strlcat(a, query, sizeof(a));
-	strlcat(a, " ", sizeof(a));
-	strlcat(a, httpv, sizeof(a));
-	strlcat(a, "\r\nHost: ", sizeof(a));
-	strlcat(a, host, sizeof(a));
-	strlcat(a, "\r\n", sizeof(a));
+#define APPEND_REQUEST(s) \
+	do { \
+		if (strlcat(blob, (s), BLOB_SIZE) >= BLOB_SIZE) \
+			request_truncated = 1; \
+	} while (0)
+
+	if (strlcpy(blob, req, BLOB_SIZE) >= BLOB_SIZE)
+		request_truncated = 1;
+	APPEND_REQUEST(" ");
+	APPEND_REQUEST(query);
+	APPEND_REQUEST(" ");
+	APPEND_REQUEST(httpv);
+	APPEND_REQUEST("\r\nHost: ");
+	APPEND_REQUEST(host);
+	APPEND_REQUEST("\r\nConnection: close\r\n");
 
 	if (!header)
-		strlcat(a, "User-Agent: " AGENT "\r\nCache-Control: no-cache\r\n", sizeof(a));
+		APPEND_REQUEST("User-Agent: " AGENT "\r\nCache-Control: no-cache\r\n");
 
 	if (auth) {
-		snprintf(authbuf, sizeof(authbuf), "%s:%s", get_option_required("user"), get_option_required("pass"));
-		i = base64_encode(authbuf, b, strlen(authbuf));
-		b[i] = '\0';
-		strlcat(a, "Authorization: Basic ", sizeof(a));
-		strlcat(a, b, sizeof(a));
-		strlcat(a, "\r\n", sizeof(a));
+		user = get_option_required("user");
+		pass = get_option_required("pass");
+		user_len = strlen(user);
+		pass_len = strlen(pass);
+
+		if (user_len > (size_t) - 1 - pass_len - 2) {
+			logmsg(LOG_ERR, "%s: authentication data too long", __FUNCTION__);
+			return -1;
+		}
+
+		auth_len = user_len + 1 + pass_len;
+		if (auth_len > ((((size_t) - 1) - 1) / 4) * 3) {
+			logmsg(LOG_ERR, "%s: authentication data too long", __FUNCTION__);
+			return -1;
+		}
+		auth64_len = ((auth_len + 2) / 3) * 4 + 1;
+
+		authbuf = malloc(auth_len + 1);
+		auth64 = malloc(auth64_len);
+		if (!authbuf || !auth64) {
+			free(authbuf);
+			free(auth64);
+			logmsg(LOG_ERR, "%s: malloc failed", __FUNCTION__);
+			return -1;
+		}
+
+		snprintf(authbuf, auth_len + 1, "%s:%s", user, pass);
+		i = base64_encode(authbuf, auth64, auth_len);
+		if ((i < 0) || ((size_t)i >= auth64_len)) {
+			free(authbuf);
+			free(auth64);
+			logmsg(LOG_ERR, "%s: base64 encoding failed", __FUNCTION__);
+			return -1;
+		}
+		auth64[i] = '\0';
+
+		APPEND_REQUEST("Authorization: Basic ");
+		APPEND_REQUEST(auth64);
+		APPEND_REQUEST("\r\n");
+
+		free(authbuf);
+		free(auth64);
 	}
 
 	if (header) {
-		strlcat(a, header, sizeof(a));
+		APPEND_REQUEST(header);
 		if (header[strlen(header)-1] != '\n')
-			strlcat(a, "\r\n", sizeof(a));
+			APPEND_REQUEST("\r\n");
 	}
 
 	if (data) {
 		snprintf(clen, sizeof(clen), "Content-Length: %zu\r\n", strlen(data));
-		strlcat(a, clen, sizeof(a));
+		APPEND_REQUEST(clen);
 	}
 
-	strlcat(a, "\r\n", sizeof(a));
+	APPEND_REQUEST("\r\n");
 	if (data)
-		strlcat(a, data, sizeof(a));
+		APPEND_REQUEST(data);
 
-	if (snprintf(blob, BLOB_SIZE, "%s", a) >= BLOB_SIZE)
-		logmsg(LOG_WARNING, "*** %s: request header truncated", __FUNCTION__);
+#undef APPEND_REQUEST
+
+	if (request_truncated) {
+		logmsg(LOG_ERR, "%s: request header truncated", __FUNCTION__);
+		return -1;
+	}
 
 	/* duplicate for sending */
 	request = strdup(blob);
 	if (!request) {
-		logmsg(LOG_DEBUG, "*** %s: strdup failed", __FUNCTION__);
+		logmsg(LOG_ERR, "%s: strdup failed", __FUNCTION__);
 		return -1;
 	}
 
 	/* parse port */
 	port = ssl ? 443 : 80;
 	strlcpy(a, host, sizeof(a));
-	if ((colon = strrchr(a, ':'))) {
+	if (a[0] == '[') {
+		char *end = strchr(a, ']');
+
+		if (end) {
+			if (end[1] == ':' && end[2] != '\0')
+				port = atoi(end + 2);
+
+			*end = '\0';
+			memmove(a, a + 1, strlen(a));
+		}
+	}
+	else if ((colon = strrchr(a, ':')) != NULL && strchr(a, ':') == colon) {
 		*colon = '\0';
 		port = atoi(colon + 1);
 	}
@@ -789,12 +876,30 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 #endif
 	hints.ai_socktype = SOCK_STREAM;
 
-	memset(cport, 0, sizeof(cport));
+	{
+		struct in_addr ipv4_addr;
+#ifdef TCONFIG_IPV6
+		struct in6_addr ipv6_addr;
+#endif
+
+		if (inet_pton(AF_INET, a, &ipv4_addr) == 1) {
+			hints.ai_family = AF_INET;
+			hints.ai_flags = AI_NUMERICHOST;
+		}
+#ifdef TCONFIG_IPV6
+		else if (inet_pton(AF_INET6, a, &ipv6_addr) == 1) {
+			hints.ai_family = AF_INET6;
+			hints.ai_flags = AI_NUMERICHOST;
+		}
+#endif
+	}
+
 	snprintf(cport, sizeof(cport), "%d", port);
 
 	for (trys = 4; trys > 0; --trys) {
 		logmsg(LOG_DEBUG, "*** %s: attempt %d", __FUNCTION__, 5 - trys);
 
+		result = NULL;
 		if (getaddrinfo(a, cport, &hints, &result) != 0) {
 			sleep(2);
 			continue;
@@ -830,7 +935,7 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 			if (c_ip)
 				route_adddel(c_ip, 1);
 
-			logmsg(LOG_DEBUG, "*** %s: [%s][%s] - connecting ...", __FUNCTION__, c_ip, cport);
+			logmsg(LOG_DEBUG, "*** %s: [%s][%s] - connecting ...", __FUNCTION__, c_ip ? c_ip : "unknown", cport);
 
 			if (connect_timeout(sockfd, rp->ai_addr, rp->ai_addrlen, 10) != -1) {
 				logmsg(LOG_DEBUG, "*** %s: connected!", __FUNCTION__);
@@ -854,7 +959,8 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 				break;
 		}
 
-		freeaddrinfo(result);
+		if (result)
+			freeaddrinfo(result);
 		if (stop)
 			break;
 
@@ -864,6 +970,8 @@ static long _http_req(const unsigned int ssl, int static_host, const char *host,
 	free(request);
 	if (stop)
 		error("Force stop.");
+
+	return -1;
 
 connected:
 	logmsg(LOG_DEBUG, "*** %s: connected:", __FUNCTION__);
@@ -911,8 +1019,6 @@ connected:
 	blob[i >= 0 ? i : 0] = '\0'; /* null-terminate the string */
 
 	fclose(f);
-	close(sockfd);
-	free(request);
 
 	/* make dump */
 	if ((c = get_dump_name()) != NULL) {
@@ -930,6 +1036,8 @@ connected:
 			fclose(f);
 		}
 	}
+
+	free(request);
 
 	/* parse response code and body */
 	i = -1;
@@ -953,9 +1061,11 @@ static long http_req(const unsigned int ssl, int static_host, const char *host, 
 	return _http_req(ssl, static_host, host, "GET", get, header, auth, NULL, body);
 }
 
-static int read_tmaddr(const char *name, long *tm, char *addr)
+static int read_tmaddr(const char *name, long *tm, char *addr, size_t addr_sz)
 {
 	char s[192];
+	char parsed_addr[INET6_ADDRSTRLEN];
+	char extra[2];
 	struct in_addr ipv4;
 #ifdef TCONFIG_IPV6
 	struct in6_addr ipv6;
@@ -963,16 +1073,26 @@ static int read_tmaddr(const char *name, long *tm, char *addr)
 
 	logmsg(LOG_DEBUG, "*** %s: IN cachename: %s", __FUNCTION__, name);
 
-	memset(s, 0, sizeof(s)); /* reset */
-	if (f_read_string(name, s, sizeof(s)) > 0) {
-		if (sscanf(s, "%ld,%63s", tm, addr) == 2) {
-			logmsg(LOG_DEBUG, "*** %s: tm=%ld addr=%s", __FUNCTION__, *tm, addr);
+	if ((addr == NULL) || (addr_sz == 0))
+		return 0;
 
-			if (*tm > 0 && (inet_pton(AF_INET, addr, &ipv4) == 1
+	memset(s, 0, sizeof(s)); /* reset */
+
+	if (f_read_string(name, s, sizeof(s)) > 0) {
+		if (sscanf(s, "%ld,%45s%1s", tm, parsed_addr, extra) == 2) {
+			logmsg(LOG_DEBUG, "*** %s: tm=%ld addr=%s", __FUNCTION__, *tm, parsed_addr);
+
+			if (*tm > 0 && (inet_pton(AF_INET, parsed_addr, &ipv4) == 1
 #ifdef TCONFIG_IPV6
-			                || inet_pton(AF_INET6, addr, &ipv6) == 1
+			                || inet_pton(AF_INET6, parsed_addr, &ipv6) == 1
 #endif
 			   )) {
+				if (strlen(parsed_addr) >= addr_sz) {
+					logmsg(LOG_ERR, "%s: address does not fit destination buffer", __FUNCTION__);
+					return 0;
+				}
+
+				strlcpy(addr, parsed_addr, addr_sz);
 				return 1;
 			}
 		}
@@ -1010,7 +1130,7 @@ static const char *get_address(int required)
 
 			strlcpy(cache_name, get_option_required("addrcache"), sizeof(cache_name));
 
-			if (read_tmaddr(cache_name, &et, addr)) {
+			if (read_tmaddr(cache_name, &et, addr, sizeof(addr))) {
 				if ((et > ut) && ((et - ut) <= DDNS_IP_CACHE)) {
 					logmsg(LOG_DEBUG, "*** %s: OUT using cached address %s from %s (expires in %ld s)", __FUNCTION__, addr, cache_name, (et - ut));
 					return addr;
@@ -1048,11 +1168,11 @@ static const char *get_address(int required)
 					if (*p == '\0')
 						continue;
 
-					end = p + strcspn(p, " \t\r\n");
+					end = p + strcspn(p, " \t\r\n<");
 					len = end - p;
 
 					if ((len == 0) || (len >= sizeof(addr))) {
-						logmsg(LOG_DEBUG, "*** %s: invalid length from %s", __FUNCTION__, services[service_num][0]);
+						logmsg(LOG_WARNING, "%s: invalid length from %s", __FUNCTION__, services[service_num][0]);
 						continue;
 					}
 
@@ -1084,7 +1204,6 @@ static const char *get_address(int required)
 					}
 #endif
 					/* write to cache if addr is OK */
-					memset(normalized, 0, sizeof(normalized));
 					if (af != 0 && inet_ntop(af, src, normalized, sizeof(normalized))) {
 						expire = ut + DDNS_IP_CACHE;
 						snprintf(s, sizeof(s), "%ld,%s", expire, normalized);
@@ -1094,12 +1213,10 @@ static const char *get_address(int required)
 
 						logmsg(LOG_DEBUG, "*** %s: detected %s via %s, cached as %s until %ld", __FUNCTION__, normalized, services[service_num][0], s, expire);
 
-						success_msg("Update successful.", 0); /* do not exit! */
-
 						return addr;
 					}
 
-					logmsg(LOG_DEBUG, "*** %s: invalid address format from %s: %s", __FUNCTION__, services[service_num][0], addr);
+					logmsg(LOG_WARNING, "%s: invalid address format from %s: %s", __FUNCTION__, services[service_num][0], addr);
 				}
 			}
 
@@ -1108,7 +1225,7 @@ static const char *get_address(int required)
 			logmsg(LOG_DEBUG, "*** %s: %s (%s) after %d attempts", __FUNCTION__, curl_err_str, services[service_num][0], n);
 			error(curl_err_str);
 #else
-			logmsg(LOG_DEBUG, "*** %s: " M_ERROR_GET_IP " (%s) after %d attempts", __FUNCTION__, services[service_num][0], n);
+			logmsg(LOG_DEBUG, "*** %s: %s (%s) after %d attempts", __FUNCTION__, M_ERROR_GET_IP, services[service_num][0], n);
 			error(M_ERROR_GET_IP);
 #endif
 		}
@@ -1144,12 +1261,19 @@ static int get_address6(char *buf, const size_t buf_sz)
 }
 #endif /* TCONFIG_IPV6 */
 
-static void append_addr_option(char *buffer, const char *format)
+static void append_addr_option(char *buffer, size_t buffer_sz, const char *format)
 {
 	const char *c;
+	size_t len;
 
-	if ((c = get_address(0)) != NULL)
-		snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), format, c);
+	if ((c = get_address(0)) == NULL)
+		return;
+
+	len = strlen(buffer);
+	if (len >= buffer_sz)
+		return;
+
+	snprintf(buffer + len, buffer_sz - len, format, c);
 }
 
 /*
@@ -1185,7 +1309,6 @@ static void update_dua(const char *type, const unsigned int ssl, const char *ser
 	char *body;
 
 	/* +opt */
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "%s?", path ? path : get_option_required("path"));
 
 	/* +opt */
@@ -1202,7 +1325,7 @@ static void update_dua(const char *type, const unsigned int ssl, const char *ser
 		snprintf(query + strlen(query), sizeof(query) - strlen(query), "mx=%s&backmx=%s&", p, (get_option_onoff("backmx", 0)) ? "YES" : "NO");
 
 	/* +opt */
-	append_addr_option(query, "myip=%s&");
+	append_addr_option(query, sizeof(query), "myip=%s&");
 
 	if (get_option_onoff("wildcard", 0))
 		strlcat(query, "wildcard=ON", sizeof(query));
@@ -1319,11 +1442,10 @@ static void update_namecheap(const unsigned int ssl)
 	char query[2048];
 
 	/* +opt +opt +opt */
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "/update?host=%s&domain=%s&password=%s", get_option_required("host"), get_option("user") ? : get_option_required("domain"), get_option_required("pass"));
 
 	/* +opt */
-	append_addr_option(query, "&ip=%s");
+	append_addr_option(query, sizeof(query), "&ip=%s");
 
 	r = http_req(ssl, 0, "dynamicdns.park-your-domain.com", query, NULL, 0, &body);
 	if (r == 200) {
@@ -1401,11 +1523,10 @@ static void update_enom(const unsigned int ssl)
 	/* http://dynamic.name-services.com/interface.asp?Command=SetDNSHost&HostName=test&Zone=test.com&Address=1.2.3.4&DomainPassword=password */
 
 	/* +opt +opt +opt */
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "/interface.asp?Command=SetDNSHost&HostName=%s&Zone=%s&DomainPassword=%s", get_option_required("host"), get_option("user") ? : get_option_required("domain"), get_option_required("pass"));
 
 	/* +opt */
-	append_addr_option(query, "&Address=%s");
+	append_addr_option(query, sizeof(query), "&Address=%s");
 
 	r = http_req(ssl, 0, "dynamic.name-services.com", query, NULL, 0, &body);
 	if (r == 200) {
@@ -1457,11 +1578,10 @@ static void update_dnsexit(const unsigned int ssl)
 	char query[2048];
 
 	/* +opt +opt +opt */
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "/RemoteUpdate.sv?login=%s&password=%s&host=%s", get_option_required("user"), get_option_required("pass"), get_option_required("host"));
 
 	/* +opt */
-	append_addr_option(query, "&myip=%s");
+	append_addr_option(query, sizeof(query), "&myip=%s");
 
 	r = http_req(ssl, 0, "update.dnsexit.com", query, NULL, 0, &body);
 	if (r == 200) { /* (\d+)=.+ */
@@ -1520,11 +1640,10 @@ static void update_zoneedit(const unsigned int ssl)
 	char query[2048];
 
 	/* +opt */
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "/auth/dynamic.html?host=%s", get_option_required("host"));
 
 	/* +opt */
-	append_addr_option(query, "&dnsto=%s");
+	append_addr_option(query, sizeof(query), "&dnsto=%s");
 
 	r = http_req(ssl, 0, "dynamic.zoneedit.com", query, NULL, 1, &body);
 	switch (r) {
@@ -1588,11 +1707,10 @@ static void update_afraid(const unsigned int ssl)
 	char query[2048];
 
 	/* +opt */
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "/dynamic/update.php?%s", get_option_required("ahash"));
 
 	/* +opt */
-	append_addr_option(query, "&address=%s");
+	append_addr_option(query, sizeof(query), "&address=%s");
 
 	r = http_req(ssl, 0, "freedns.afraid.org", query, NULL, 0, &body);
 	if (r == 200) {
@@ -1700,7 +1818,7 @@ static char *remove_spaces(const char *body)
 	/* allocate memory for the new string (plus null terminator) */
 	copy = (char *)malloc(length + 1);
 	if (!copy)
-		error("memory allocation failed");
+		error(M_ERROR_MEM_ALLOC);
 
 	/* copy non-space characters to the new string */
 	for (i = 0; body[i] != '\0'; i++) {
@@ -1745,6 +1863,36 @@ static int cloudflare_errorcheck(const int code, const char *req, char *body)
 	return -1;
 }
 
+static const char *cloudflare_record_type(const char *addr)
+{
+	struct in_addr ipv4;
+#ifdef TCONFIG_IPV6
+	struct in6_addr ipv6;
+#endif
+
+	if (inet_pton(AF_INET, addr, &ipv4) == 1)
+		return "A";
+#ifdef TCONFIG_IPV6
+	if (inet_pton(AF_INET6, addr, &ipv6) == 1)
+		return "AAAA";
+#endif
+
+	return NULL;
+}
+
+static int cloudflare_content_matches(const char *content, const char *addr)
+{
+	const char *quote;
+	size_t len;
+
+	quote = strchr(content, '"');
+	if (quote == NULL)
+		return 0;
+
+	len = quote - content;
+	return (strlen(addr) == len) && (strncmp(addr, content, len) == 0);
+}
+
 /* warning! doesn't work (in libcurl version) with dump enabled! */
 static void update_cloudflare(const unsigned int ssl)
 {
@@ -1756,6 +1904,7 @@ static void update_cloudflare(const unsigned int ssl)
 	char *body_copy = NULL;
 	long s;
 	const char *addr;
+	const char *record_type;
 	int prox, r, current_proxied;
 	char *find;
 	char *found;
@@ -1766,8 +1915,14 @@ static void update_cloudflare(const unsigned int ssl)
 
 	zone = get_option_required("url");
 	host = get_option_required("host");
+	addr = get_address(1);
+	prox = get_option_onoff("wildcard", 0);
+	record_type = cloudflare_record_type(addr);
+	if (record_type == NULL)
+		error(M_INVALID_PARAM__S, "addr");
+
 	/* +opt +opt */
-	snprintf(query, QUARTER_BLOB, "/client/v4/zones/%s/dns_records?type=A&name=%s&order=name&direction=asc", zone, host);
+	snprintf(query, QUARTER_BLOB, "/client/v4/zones/%s/dns_records?type=%s&name=%s&order=name&direction=asc", zone, record_type, host);
 
 	s = http_req(ssl, 1, "api.cloudflare.com", query, header, 0, &body);
 
@@ -1781,9 +1936,6 @@ static void update_cloudflare(const unsigned int ssl)
 		error(M_ERROR_MEM_ALLOC);
 
 	r = cloudflare_errorcheck(s, "GET", body_copy);
-
-	addr = get_address(1);
-	prox = get_option_onoff("wildcard", 0);
 
 	if (r == 1) { /* no existing record - create with POST */
 		if (get_option_onoff("backmx", 0)) {
@@ -1804,7 +1956,7 @@ static void update_cloudflare(const unsigned int ssl)
 		}
 
 		found += strlen(find);
-		if (strncmp(addr, found, strlen(addr)) == 0) {
+		if (cloudflare_content_matches(found, addr)) {
 			/* IP is the same - check proxied flag consistency */
 			current_proxied = (strstr(body_copy, "\"proxied\":true") != NULL);
 			if ((prox && current_proxied) || (!prox && !current_proxied)) {
@@ -1843,7 +1995,7 @@ static void update_cloudflare(const unsigned int ssl)
 	body_copy = NULL;
 
 	/* prepare JSON payload */
-	snprintf(data, QUARTER_BLOB, "{\"content\":\"%s\",\"name\":\"%s\",\"proxied\":%s,\"type\":\"A\"}", addr, host, (prox ? "true" : "false"));
+	snprintf(data, QUARTER_BLOB, "{\"content\":\"%s\",\"name\":\"%s\",\"proxied\":%s,\"type\":\"%s\"}", addr, host, (prox ? "true" : "false"), record_type);
 
 	/* POST for create, PUT for update */
 	s = _http_req(ssl, 1, "api.cloudflare.com", (r == 1) ? "POST" : "PUT", query, header, 0, data, &body);
@@ -1876,10 +2028,9 @@ static void update_duckdns(const unsigned int ssl)
 	char *body;
 	char query[2048];
 
-	memset(query, 0, sizeof(query));
 	snprintf(query, sizeof(query), "/update?domains=%s&token=%s", get_option_required("host"), get_option_required("ahash"));
 
-	append_addr_option(query, "&ip=%s");
+	append_addr_option(query, sizeof(query), "&ip=%s");
 
 	r = http_req(ssl, 0, "www.duckdns.org", query, NULL, 0, &body);
 	if (r == 200) {
@@ -1908,7 +2059,14 @@ static void update_custom(void)
 	char buffer[INET6_ADDRSTRLEN];
 #endif /* TCONFIG_IPV6 */
 
-	/* https://user:pass@domain:port/path?query */
+	/*
+	 * Custom URL format:
+	 *   http[s]://domain[:port]/path?query
+	 *
+	 * URL userinfo (user:pass@) is not parsed here. If present, it is
+	 * only used as an authentication marker; http_req() still reads the
+	 * Basic authentication credentials from the user/pass options.
+	 */
 
 	strlcpy(url, get_option_required("url"), sizeof(url));
 	https = 0;
@@ -1978,12 +2136,12 @@ static void update_custom(void)
 static void check_cookie(void)
 {
 	const char *c;
-	char addr[16];
+	char addr[INET6_ADDRSTRLEN];
 	long tm;
 
 	logmsg(LOG_DEBUG, "*** %s: IN", __FUNCTION__);
 
-	if (((c = get_option("cookie")) == NULL) || (!read_tmaddr(c, &tm, addr))) {
+	if (((c = get_option("cookie")) == NULL) || (!read_tmaddr(c, &tm, addr, sizeof(addr)))) {
 		logmsg(LOG_DEBUG, "*** %s: no cookie", __FUNCTION__);
 		return;
 	}
@@ -1997,8 +2155,9 @@ static void check_cookie(void)
 		return;
 	}
 
-	logmsg(LOG_DEBUG, "*** %s: " M_SAME_IP " (%s)", __FUNCTION__, c);
+	logmsg(LOG_DEBUG, "*** %s: %s (%s)", __FUNCTION__, M_SAME_IP, c);
 	puts(M_SAME_IP);
+	save_msg(M_SAME_IP);
 
 	logmsg(LOG_DEBUG, "*** %s: EXIT", __FUNCTION__);
 
@@ -2028,7 +2187,6 @@ static void save_cookie(void)
 		return;
 	}
 
-	memset(s, 0, sizeof(s));
 	snprintf(s, sizeof(s), "%ld,%s", now, c);
 	f_write_string(cookie, s, FW_NEWLINE, 0);
 
@@ -2067,15 +2225,12 @@ int main(int argc, char *argv[])
 		logmsg(LOG_ERR, "Cannot alocate memory, aborting ...");
 		return 1;
 	}
-	memset(blob, 0, BLOB_SIZE); /* reset */
+	blob[0] = '\0';
 
 	mkdir("/var/lib/mdu", 0700);
 	chdir("/var/lib/mdu");
 	eval("rm", "-f", MDU_STOP_FN); /* remove stop file on start */
 
-	memset(sPrefix, 0, sizeof(sPrefix)); /* reset */
-	memset(ifname, 0, sizeof(ifname)); /* reset */
-	memset(tmp, 0, sizeof(tmp)); /* reset */
 
 	/* addr (@...) is present in the config */
 	if (((c = get_option("addr")) != NULL) && *c == '@') {
@@ -2084,7 +2239,7 @@ int main(int argc, char *argv[])
 			snprintf(sPrefix, sizeof(sPrefix), (atoi(c + 1) == 1 ? "wan": "wan%s"), c + 1);
 			snprintf(ifname, sizeof(ifname), "%s", get_wanface(sPrefix));
 			if ((strcmp(ifname, "none") == 0) || (get_wanx_proto(sPrefix) == WP_DISABLED)) /* in some cases */
-				memset(ifname, 0, sizeof(ifname)); /* reset again */
+				ifname[0] = '\0';
 		}
 		/* check if it's no WAN mode, if so - add custom interface */
 		mwan_num = nvram_get_int("mwan_num");
@@ -2102,7 +2257,6 @@ int main(int argc, char *argv[])
 		}
 		if (no_wan_mode == 1) {
 			logmsg(LOG_DEBUG, "*** %s: checking for no WAN mode - true, using custom interface: %s", __FUNCTION__, nvram_safe_get("ddnsx_custom_if"));
-			memset(ifname, 0, sizeof(ifname)); /* reset */
 			snprintf(ifname, sizeof(ifname), "%s", nvram_safe_get("ddnsx_custom_if"));
 		}
 	}
