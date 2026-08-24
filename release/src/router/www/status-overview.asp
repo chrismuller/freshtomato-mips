@@ -22,6 +22,11 @@
 <script src="interfaces.js?rel=<% version(); %>"></script>
 <script src="wireless.jsx?_http_id=<% nv(http_id); %>"></script>
 <script src="ethernet-icon.js?rel=<% version(); %>"></script>
+<!-- BCMARM-BEGIN -->
+<script>
+var lastjiffiestotal = 0, lastjiffiesidle = 0, lastjiffiesusage = 100;
+</script>
+<!-- BCMARM-END -->
 <script src="status-data.jsx?_http_id=<% nv(http_id); %>"></script>
 <!-- USB-BEGIN -->
 <script src="wwan_parser.js?rel=<% version(); %>"></script>
@@ -29,10 +34,18 @@
 
 <script>
 //	<% jsdefaults(); %>
-var wmo = {'ap':'Access Point','sta':'Wireless Client','wet':'Wireless Ethernet Bridge','wds':'WDS'};
+var wmo = {'ap':'Access Point','sta':'Wireless Client','wet':'Wireless Ethernet Bridge','wds':'WDS'
+/* BCMWL6-BEGIN */
+	   ,'psta':'Media Bridge'
+/* BCMWL6-END */
+	   };
 var auth = {'disabled':'-','wep':'WEP','wpa_personal':'WPA Personal (PSK)','wpa_enterprise':'WPA Enterprise','wpa2_personal':'WPA2 Personal (PSK)','wpa2_enterprise':'WPA2 Enterprise','wpaX_personal':'WPA / WPA2 Personal','wpaX_enterprise':'WPA / WPA2 Enterprise','radius':'Radius'};
 var enc = {'tkip':'TKIP','aes':'AES','tkip+aes':'TKIP / AES'};
-var bgmo = {'disabled':'-','mixed':'Auto','b-only':'B Only','g-only':'G Only','bg-mixed':'B/G Mixed','lrs':'LRS','n-only':'N Only'};
+var bgmo = {'disabled':'-','mixed':'Auto','b-only':'B Only','g-only':'G Only','bg-mixed':'B/G Mixed','lrs':'LRS','n-only':'N Only'
+/* BCMWL6-BEGIN */
+	    ,'nac-mixed':'N/AC Mixed','ac-only':'AC Only'
+/* BCMWL6-END */
+};
 
 var updateWWANTimers = [], customStatusTimers = [], show_dhcpc = [], show_codi = [], show_radio = [];
 var cprefix = 'status_overview';
@@ -327,9 +340,15 @@ function show() {
 	anon_update();
 
 	c('cpu', stats.cpuload);
+/* BCMARM-BEGIN */
+	c('cpupercent', stats.cpupercent);
+/* BCMARM-END */
 /* RTNPLUS-BEGIN */
 	c('wlsense', stats.wlsense);
 /* RTNPLUS-END */
+/* BCMARM-BEGIN */
+	c('temps', stats.cputemp + 'C / ' + Math.round(stats.cputemp.slice(0, -1) * 1.8 + 32) + '°F');
+/* BCMARM-END */
 	c('uptime', stats.uptime);
 	c('time', stats.time);
 	c('memory', stats.memory);
@@ -345,22 +364,14 @@ function show() {
 	elem.display('ip6_wan_dns1', stats.ip6_wan_dns1 != '');
 	c('ip6_wan_dns2', stats.ip6_wan_dns2);
 	elem.display('ip6_wan_dns2', stats.ip6_wan_dns2 != '');
-	c('ip6_lan', stats.ip6_lan);
-	elem.display('ip6_lan', stats.ip6_lan != '');
-	c('ip6_lan_ll', stats.ip6_lan_ll);
-	elem.display('ip6_lan_ll', stats.ip6_lan_ll != '');
-	c('ip6_lan1', stats.ip6_lan1);
-	elem.display('ip6_lan1', stats.ip6_lan1 != '');
-	c('ip6_lan1_ll', stats.ip6_lan1_ll);
-	elem.display('ip6_lan1_ll', stats.ip6_lan1_ll != '');
-	c('ip6_lan2', stats.ip6_lan2);
-	elem.display('ip6_lan2', stats.ip6_lan2 != '');
-	c('ip6_lan2_ll', stats.ip6_lan2_ll);
-	elem.display('ip6_lan2_ll', stats.ip6_lan2_ll != '');
-	c('ip6_lan3', stats.ip6_lan3);
-	elem.display('ip6_lan3', stats.ip6_lan3 != '');
-	c('ip6_lan3_ll', stats.ip6_lan3_ll);
-	elem.display('ip6_lan3_ll', stats.ip6_lan3_ll != '');
+	for (var bridgeId = 0; bridgeId <= MAX_BRIDGE_ID; ++bridgeId) {
+		var bridgeSuffix = (bridgeId == 0) ? '' : bridgeId.toString();
+		var ip6Lan = 'ip6_lan'+bridgeSuffix;
+		c(ip6Lan, stats[ip6Lan]);
+		elem.display(ip6Lan, stats[ip6Lan] != '');
+		c(ip6Lan+'_ll', stats[ip6Lan+'_ll']);
+		elem.display(ip6Lan+'_ll', stats[ip6Lan+'_ll'] != '');
+	}
 /* IPV6-END */
 
 	for (uidx = 1; uidx <= nvram.mwan_num; ++uidx) {
@@ -528,18 +539,32 @@ function init() {
 		{ title: 'Model', text: nvram.t_model_name },
 		{ title: 'Bootloader (CFE)', text: stats.cfeversion },
 		{ title: 'Chipset', text: stats.systemtype },
+/* BCMARM-BEGIN */
+		{ title: 'CPU Frequency', text: stats.cpumhz, suffix: ' <small>(dual-core)<\/small>' },
+/* BCMARM-END */
+/* BCMARM-NO-BEGIN */
 		{ title: 'CPU Frequency', text: stats.cpumhz },
+/* BCMARM-NO-END */
 		{ title: 'Flash Size', text: stats.flashsize },
 		null,
 		{ title: 'Time', rid: 'time', text: stats.time },
 		{ title: 'Uptime', rid: 'uptime', text: stats.uptime },
 		{ title: 'CPU Load <small>(1 / 5 / 15 mins)<\/small>', rid: 'cpu', text: stats.cpuload },
+/* BCMARM-BEGIN */
+		{ title: 'CPU Usage', rid: 'cpupercent', text: stats.cpupercent },
+/* BCMARM-END */
 		{ title: 'Used / Total RAM', rid: 'memory', text: stats.memory },
 		{ title: 'Used / Total Swap', rid: 'swap', text: stats.swap, hidden: (stats.swap == '') },
 		{ title: 'Used / Total NVRAM', rid: 'nvram_stat', text: scaleSize(nvstat.size - nvstat.free)+' / '+scaleSize(nvstat.size)+' <small>('+((nvstat.size - nvstat.free) / nvstat.size * 100.0).toFixed(2)+'%)<\/small><div class="progress-wrapper"><div class="progress-container"><div class="progress-bar" style="background-color:'+setColor(((nvstat.size - nvstat.free) / nvstat.size * 100.0).toFixed(2))+';width:'+((nvstat.size - nvstat.free) / nvstat.size * 100.0).toFixed(2)+'%"><\/div><\/div><\/div>' }
-/* RTNPLUS-BEGIN */
+/* BCMARM-BEGIN */
 		,null,
-		{ title: 'Wireless Temperature', rid: 'wlsense', text: stats.wlsense }
+		{ title: 'CPU Temperature', rid: 'temps', text: stats.cputemp + 'C / ' + Math.round(stats.cputemp.slice(0, -1) * 1.8 + 32) + '°F' }
+/* BCMARM-END */
+/* RTNPLUS-BEGIN */
+/* BCMARM-NO-BEGIN */
+		,null
+/* BCMARM-NO-END */
+		,{ title: 'Wireless Temperature', rid: 'wlsense', text: stats.wlsense }
 /* RTNPLUS-END */
 	]);
 </script>
@@ -618,7 +643,8 @@ function init() {
 	for (var i = 0 ; i <= MAX_BRIDGE_ID ; i++) {
 		var j = (i == 0) ? '' : i.toString();
 		if (nvram['lan'+j+'_ifname'].length > 0) {
-			if (nvram['lan'+j+'_proto'] == 'dhcp') {
+			var l2Only = (nvram['lan'+j+'_ipaddr'] == '0.0.0.0');
+			if (!l2Only && (nvram['lan'+j+'_proto'] == 'dhcp')) {
 				if ((!fixIP(nvram.dhcpd_startip)) || (!fixIP(nvram.dhcpd_endip))) {
 					var x = nvram['lan'+j+'_ipaddr'].split('.').splice(0, 3).join('.')+'.';
 					nvram['dhcpd'+j+'_startip'] = x + 2;
@@ -629,30 +655,44 @@ function init() {
 			}
 			else {
 				s += ((s.length > 0) && (s.charAt(s.length - 1) != ' ')) ? '<br>' : '';
-				s += '<b>br'+i+'<\/b> (LAN'+i+') - Disabled';
+				s += '<b>br'+i+'<\/b> (LAN'+i+') - '+(l2Only ? 'Disabled (L2 only)' : 'Disabled');
 			}
 			t += ((t.length > 0) && (t.charAt(t.length - 1) != ' ')) ? '<br>' : '';
-			t += '<b>br'+i+'<\/b> (LAN'+i+') - '+nvram['lan'+j+'_ipaddr']+'/'+numberOfBitsOnNetMask(nvram['lan'+j+'_netmask']);
+			t += '<b>br'+i+'<\/b> (LAN'+i+') - ';
+			if (l2Only)
+				t += 'L2 only';
+			else {
+				t += nvram['lan'+j+'_ipaddr'];
+				if (fixIP(nvram['lan'+j+'_netmask']))
+					t += '/'+numberOfBitsOnNetMask(nvram['lan'+j+'_netmask']);
+			}
 		}
 	}
 
-	createFieldTable('', [
+	var lanFields = [
 		{ title: 'Router MAC Address', text: nvram.lan_hwaddr },
 		{ title: 'Router IP Addresses', text: t },
-		{ title: 'Gateway', text: nvram.lan_gateway, ignore: nvram.wan_proto != 'disabled' },
+		{ title: 'Gateway', text: nvram.lan_gateway, ignore: nvram.wan_proto != 'disabled' }
+	];
 /* IPV6-BEGIN */
-		{ title: 'LAN (br0) IPv6 Address', rid: 'ip6_lan', text: stats.ip6_lan, hidden: (stats.ip6_lan == '') },
-		{ title: 'LAN (br0) IPv6 LL Address', rid: 'ip6_lan_ll', text: stats.ip6_lan_ll, hidden: (stats.ip6_lan_ll == '') },
-		{ title: 'LAN1 (br1) IPv6 Address', rid: 'ip6_lan1', text: stats.ip6_lan1, hidden: (stats.ip6_lan1 == '') },
-		{ title: 'LAN1 (br1) IPv6 LL Address', rid: 'ip6_lan1_ll', text: stats.ip6_lan1_ll, hidden: (stats.ip6_lan1_ll == '') },
-		{ title: 'LAN2 (br2) IPv6 Address', rid: 'ip6_lan2', text: stats.ip6_lan2, hidden: (stats.ip6_lan2 == '') },
-		{ title: 'LAN2 (br2) IPv6 LL Address', rid: 'ip6_lan2_ll', text: stats.ip6_lan2_ll, hidden: (stats.ip6_lan2_ll == '') },
-		{ title: 'LAN3 (br3) IPv6 Address', rid: 'ip6_lan3', text: stats.ip6_lan3, hidden: (stats.ip6_lan3 == '') },
-		{ title: 'LAN3 (br3) IPv6 LL Address', rid: 'ip6_lan3_ll', text: stats.ip6_lan3_ll, hidden: (stats.ip6_lan3_ll == '') },
+	for (var i = 0 ; i <= MAX_BRIDGE_ID; i++) {
+		var j = (i == 0) ? '' : i.toString();
+		var ip6Rid = 'ip6_lan'+j;
+		var ip6LlRid = ip6Rid+'_ll';
+		var ip6Address = stats[ip6Rid] || '';
+		var ip6LlAddress = stats[ip6LlRid] || '';
+		var l2Only = (nvram['lan'+j+'_ipaddr'] == '0.0.0.0');
+		var title = 'LAN'+j+' (br'+i+') IPv6';
+
+		lanFields.push({ title: title+' Address', rid: ip6Rid, text: ip6Address, hidden: (ip6Address == '') || l2Only });
+		lanFields.push({ title: title+' LL Address', rid: ip6LlRid, text: ip6LlAddress, hidden: (ip6LlAddress == '') || l2Only });
+	}
 /* IPV6-END */
+	lanFields.push(
 		{ title: 'DNS', rid: 'dns', text: nvram.wan_dns, ignore: nvram.wan_proto != 'disabled' },
 		{ title: 'DHCP', text: s }
-	]);
+	);
+	createFieldTable('', lanFields);
 </script>
 </div>
 

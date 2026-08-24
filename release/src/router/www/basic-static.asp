@@ -51,10 +51,12 @@ sg.resetNewEditor = function() {
 		cookie.set('addstatic', '', 0);
 		c = c.split(',');
 		if (c.length == 3) {
+			/* check if IPv4 or IPv6 */
+			var v6 = (c[1].indexOf(':') != -1);
 			f[0].value = c[0];
 			f[1].value = mac_null;
-			f[3].value = c[1];
-			f[4].value = '';
+			f[3].value = v6 ? '' : c[1];
+			f[4].value = v6 ? c[1] : '';
 			f[6].value = c[2];
 			return;
 		}
@@ -378,9 +380,7 @@ function earlyInit() {
 }
 
 function init() {
-	var c;
-	if (((c = cookie.get(cprefix+'_notes_vis')) != null) && (c == '1'))
-		toggleVisibility(cprefix, 'notes');
+	restoreVisibility(cprefix, 'notes');
 
 	sg.recolor();
 }
@@ -411,9 +411,7 @@ function init() {
 <div class="section-title">DHCP Reservation</div>
 <div class="section">
 	<div class="tomato-grid" id="bs-grid"></div>
-	<input type="button" value="Backup" id="backup-button" onclick="backupGrid()">
-	<input type="button" value="Restore" id="restore-button" onclick="restoreGrid()">
-	<input type="button" value="Clear Table" id="clear-button" onclick="clearGrid()">
+	<script>writeGridButtons();</script>
 </div>
 
 <!-- / / / -->
@@ -431,7 +429,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Notes <small><i><a href="javascript:toggleVisibility(cprefix,'notes');" id="toggleLink-notes"><span id="sesdiv_notes_showhide">(Show)</span></a></i></small></div>
+<script>writeToggleSectionTitle('Notes', 'notes');</script>
 <div class="section" id="sesdiv_notes" style="display:none">
 	<ul>
 		<li><b>MAC Address</b> - Unique identifier associated to a network interface on this particular device.</li>
@@ -457,11 +455,7 @@ function init() {
 
 <!-- / / / -->
 
-<div id="footer">
-	<span id="footer-msg"></span>
-	<input type="button" value="Save" id="save-button" onclick="save()">
-	<input type="button" value="Cancel" id="cancel-button" onclick="reloadPage();">
-</div>
+<script>writeFooter();</script>
 
 </td></tr>
 </table>

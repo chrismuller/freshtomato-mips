@@ -32,7 +32,7 @@ function init() {
 <div class="about">
 	FreshTomato Custom Firmware <% version(1); %><br>
 	Linux kernel <% version(2); %> and Broadcom Wireless Driver <% version(3); %><br><br>
-	Built on <% build_time(); %> &nbsp;&nbsp;<b>|</b>&nbsp;&nbsp; Copyright &copy; 2016-2026 by Pedro<br><br><hr>
+	Built on <% build_time(); %> (git: #@GIT_HASH@) &nbsp;&nbsp;<b>|</b>&nbsp;&nbsp; Copyright &copy; 2016-2026 by Pedro<br><br><hr>
 
 	<div style="text-align:center;padding:20px 0 20px 0">
 		<b style="font-size:1.2em;padding-bottom:20px">
@@ -106,7 +106,7 @@ function init() {
 	- Ethernet Ports State<br>
 	- Extended MOTD (written by @Monter, modified by @Shibby)<br>
 	- Webmon Backup Script<br>
-	<i>Copyright (C) 2011-2013 Michał Rupental</i><br>
+	<i>Copyright (C) 2011-2014 Michał Rupental</i><br>
 	<a href="https://openlinksys.info" class="new_window">https://openlinksys.info</a><br>
 	<br>
 
@@ -121,7 +121,7 @@ function init() {
 <!-- HFS-BEGIN -->
 	- HFS / HFS+ filesystem integration<br>
 <!-- HFS-END -->
-	<i>Copyright (C) 2007-2011 Ofer Chen &amp; Vicente Soriano</i><br>
+	<i>Copyright (C) 2007-2014 Ofer Chen &amp; Vicente Soriano</i><br>
 	<a href="https://victek.is-a-geek.com" class="new_window">https://victek.is-a-geek.com</a><br>
 	<br>
 
@@ -150,6 +150,9 @@ function init() {
 	- Tinc Daemon integration and GUI<br>
 <!-- TINC-END -->
 	- Comcast DSCP Fix GUI<br>
+<!-- ZFS-BEGIN -->
+	- ZFS filesystem integration<br>
+<!-- ZFS-END -->
 	<i>Copyright (C) 2014-2022 Lance Fredrickson</i><br>
 	<a href="mailto:lancethepants@gmail.com">lancethepants@gmail.com</a><br>
 	<br>

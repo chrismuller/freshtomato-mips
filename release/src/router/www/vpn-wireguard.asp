@@ -2085,7 +2085,7 @@ function init() {
 
 <!-- / / / -->
 
-<div class="section-title">Status</div>
+<div class="section-title">Wireguard Status</div>
 <div class="section">
 	<div class="fields">
 		<script>
@@ -2284,11 +2284,7 @@ function init() {
 
 <!-- / / / -->
 
-<div id="footer">
-	<span id="footer-msg"></span>
-	<input type="button" value="Save" id="save-button" onclick="save()">
-	<input type="button" value="Cancel" id="cancel-button" onclick="reloadPage();">
-</div>
+<script>writeFooter();</script>
 
 </td></tr>
 </table>

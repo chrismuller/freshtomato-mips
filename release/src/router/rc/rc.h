@@ -135,6 +135,7 @@ static inline int is_psta(int idx, int unit, int subunit, void *param)
 /* rc.c */
 typedef void (*_tf_ipt_write)(const char *format, ... );
 typedef void (*_tf_ip6t_write)(const char *format, ... );
+extern int is_sta(int idx, int unit, int subunit, void *param);
 extern void chains_log_detection(void);
 extern void fix_chain_in_drop(void);
 extern int env2nv(char *env, char *nv);
@@ -161,7 +162,8 @@ static inline int ifconfig(const char *name, int flags, const char *addr, const 
 	return _ifconfig(name, flags, addr, netmask, NULL, 0);
 }
 extern int route_add(char *name, int metric, char *dst, char *gateway, char *genmask);
-extern void route_del(char *name, int metric, char *dst, char *gateway, char *genmask);
+extern int route_error_retryable(int err);
+extern int route_del(char *name, int metric, char *dst, char *gateway, char *genmask);
 extern void config_loopback(void);
 extern void start_vlan(void);
 extern void stop_vlan(void);
@@ -339,7 +341,7 @@ extern void start_ipv6(void);
 extern void stop_ipv6(void);
 #endif /* TCONFIG_IPV6 */
 #ifdef TCONFIG_BCMBSD
-extern int start_bsd(void);
+extern void start_bsd(void);
 extern void stop_bsd(void);
 #endif /* TCONFIG_BCMBSD */
 #ifdef TCONFIG_MDNS
@@ -475,6 +477,7 @@ static inline void stop_ddns(void) { };
 #endif
 
 /* misc.c */
+extern int lan_ifname_for_ipv4(const char *ip, char *ifname, size_t len);
 extern void usage_exit(const char *cmd, const char *help) __attribute__ ((noreturn));
 #define modprobe(mod, args...) ({ char *argv[] = { "modprobe", "-s", mod, ## args, NULL }; _eval(argv, NULL, 0, NULL); })
 extern int modprobe_r(const char *mod);
@@ -518,7 +521,7 @@ extern int mtd_unlock_erase_main(int argc, char *argv[]);
 /* buttons.c */
 extern int buttons_main(int argc, char *argv[]);
 
-#if defined(TCONFIG_BCMARM) || defined(TCONFIG_BLINK)
+#ifdef TCONFIG_RTNPLUS
 /* blink.c */
 extern int blink_main(int argc, char *argv[]);
 
