@@ -249,21 +249,6 @@ function init() {
 	<br>
 	Built on <% build_time(); %> by Chris Muller
 	<br>
-	<br>
-	<br>
-	<b>Click below to send a "Thank you" gift through PayPal:</b>
-	<br>
-	<br>
-	<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
-	<div>
-		<input type="hidden" name="cmd" value="_s-xclick">
-		<input type="image" src="donate.gif" style="border:0" name="submit" alt="Donate">
-		<input type="hidden" name="hosted_button_id" value="B4FDH9TH6Z8FU">
-	</div>
-	</form>
-	<br>
-	<div id="donate"><b>...Or by Bitcoin: </b> 1JDxBBQvcJ9XxgagJRNVrqC1nysq8F8B1Y</div>
-	<br>
 	<hr>
 </div>
 

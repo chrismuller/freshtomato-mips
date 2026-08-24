@@ -1055,7 +1055,7 @@ static void nat_table(void)
 		}
 	} else if ((!gateway_mode) && (nvram_match("wk_mode_x", "1"))) {
 			
-		for (j = 1; j <= MWAN_MAX; j++) {
+		for (j = 1; j <= mwan_count; j++) {
 			for (i = 0; i < wanfaces[j - 1].count; ++i) {
 				if (*(wanfaces[j - 1].iface[i].name)) {
 					/* chain_wan_prerouting */
@@ -1064,7 +1064,7 @@ static void nat_table(void)
 				}
 			}
 		}
-		
+
 		if (is_anywanup()) {
 			ipt_forward(IPT_TABLE_NAT);
 			ipt_triggered(IPT_TABLE_NAT);
