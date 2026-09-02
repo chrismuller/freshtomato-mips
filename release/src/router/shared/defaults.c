@@ -1,7 +1,5 @@
 #include <tomato_config.h>
 
-#if defined(TCONFIG_BCMARM) || defined(NVRAM_DEFAULTS_FULL)
-
 /*
  *
  * Tomato Firmware
@@ -15,16 +13,18 @@
 
 #include "tomato_profile.h"
 #include <string.h>
+#include <shutils.h>
 #ifdef TCONFIG_BCMARM
  #include <stdio.h>
  #include <ctype.h>
  #include <wlioctl.h>
- #include <shutils.h>
  #include <bcmnvram.h>
 #else
- #include "defaults.h"
+ #include <ctype.h>
+ #include <bcmnvram.h>
 #endif
 #include <shared.h>
+#include "defaults.h"
 #if MWAN_MAX < 1 || MWAN_MAX > 8
  #error "Unsupported MWAN_MAX range"
 #endif
@@ -46,22 +46,11 @@
 #endif
 
 /*
- * ARM uses Broadcom's larger nvram_tuple while MIPS keeps the compact
- * two-pointer defaults_t used by the nvram utility.  The common tables
- * intentionally initialize only name/key and value; all remaining ARM
- * nvram_tuple members are zero-initialized by C.
+ * Use Broadcom's nvram_tuple for all default tables. The common two-field
+ * initializers set name and value; next is zero-initialized by C.
  */
-#ifdef TCONFIG_BCMARM
- #define DEFAULTS_TYPE struct nvram_tuple
- #define DEFAULTS_CONST
- #define DEFAULTS_MAIN router_defaults
-#else
- #define DEFAULTS_TYPE defaults_t
- #define DEFAULTS_CONST const
- #define DEFAULTS_MAIN defaults
-#endif
 
-DEFAULTS_CONST DEFAULTS_TYPE rstats_defaults[] = {
+struct nvram_tuple rstats_defaults[] = {
 	{ "rstats_path",		""				},
 	{ "rstats_stime",		"48"				},
 	{ "rstats_offset",		"1"				},
@@ -72,7 +61,7 @@ DEFAULTS_CONST DEFAULTS_TYPE rstats_defaults[] = {
 	{ NULL, NULL }
 };
 
-DEFAULTS_CONST DEFAULTS_TYPE cstats_defaults[] = {
+struct nvram_tuple cstats_defaults[] = {
 	{ "cstats_path",		""				},
 	{ "cstats_stime",		"48"				},
 	{ "cstats_offset",		"1"				},
@@ -86,7 +75,7 @@ DEFAULTS_CONST DEFAULTS_TYPE cstats_defaults[] = {
 };
 
 #ifdef TCONFIG_FTP
-DEFAULTS_CONST DEFAULTS_TYPE ftp_defaults[] = {
+struct nvram_tuple ftp_defaults[] = {
 	{ "ftp_super",			"0"				},
 	{ "ftp_anonymous",		"0"				},
 	{ "ftp_dirlist",		"0"				},
@@ -110,7 +99,7 @@ DEFAULTS_CONST DEFAULTS_TYPE ftp_defaults[] = {
 #endif /* TCONFIG_FTP */
 
 #ifdef TCONFIG_SNMP
-DEFAULTS_CONST DEFAULTS_TYPE snmp_defaults[] = {
+struct nvram_tuple snmp_defaults[] = {
 	{ "snmp_port",			"161"				},
 	{ "snmp_remote",		"0"				},
 	{ "snmp_remote_sip",		""				},
@@ -126,7 +115,7 @@ DEFAULTS_CONST DEFAULTS_TYPE snmp_defaults[] = {
 #define BRIDGE_BLOCK_UPNP(i) \
 	{ "upnp_lan" #i,		""				},
 
-DEFAULTS_CONST DEFAULTS_TYPE upnp_defaults[] = {
+struct nvram_tuple upnp_defaults[] = {
 	{ "upnp_secure",		"1"				},
 	{ "upnp_port",			"0"				},
 	{ "upnp_ssdp_interval",		"900"				},	/* SSDP interval */
@@ -185,7 +174,7 @@ DEFAULTS_CONST DEFAULTS_TYPE upnp_defaults[] = {
 };
 
 #ifdef TCONFIG_BCMBSD
-DEFAULTS_CONST DEFAULTS_TYPE bsd_defaults[] = {
+struct nvram_tuple bsd_defaults[] = {
 	{ "bsd_role", 		 	"3"				},	/* Band Steer Daemon; 0:Disable, 1:Primary, 2:Helper, 3:Standalone */
 	{ "bsd_hport", 		 	"9877"				},	/* BSD helper port */
 	{ "bsd_pport", 		 	"9878"				},	/* BSD Primary port */
@@ -535,7 +524,7 @@ DEFAULTS_CONST DEFAULTS_TYPE bsd_defaults[] = {
 	{"wg" #i "_prio",		""				},
 #endif /* TCONFIG_WIREGUARD */
 
-DEFAULTS_CONST DEFAULTS_TYPE DEFAULTS_MAIN[] = {
+struct nvram_tuple router_defaults[] = {
 	{ "restore_defaults",		"0"				},	/* Set to 0 to not restore defaults on boot */
 
 	/* LAN H/W parameters */
@@ -1095,7 +1084,9 @@ DEFAULTS_CONST DEFAULTS_TYPE DEFAULTS_MAIN[] = {
 	{ "ct_max",			""				},
 	{ "ct_hashsize",		"2048"				},
 	{ "nf_ttl",			"0"				},
+#ifdef TCONFIG_L7
 	{ "nf_l7in",			"1"				},
+#endif
 	{ "nf_sip",			"0"				},
 	{ "nf_rtsp",			"0"				},
 	{ "nf_pptp",			"1"				},
@@ -1247,9 +1238,6 @@ DEFAULTS_CONST DEFAULTS_TYPE DEFAULTS_MAIN[] = {
 #ifdef TCONFIG_DMZ
 	{ "dmz_enable",			"0"				},
 	{ "dmz_ipaddr",			"0"				},
-#ifdef TCONFIG_DMZMAC
-	{ "dmz_macaddr",		""				},
-#endif
 	{ "dmz_sip",			""				},
 	{ "dmz_ra",			"1"				},
 #endif /* TCONFIG_DMZ */
@@ -1955,7 +1943,6 @@ DEFAULTS_CONST DEFAULTS_TYPE DEFAULTS_MAIN[] = {
 	{ NULL, NULL }
 };
 
-#ifdef TCONFIG_BCMARM
 /* Translates from, for example, wl0_ (or wl0.1_) to wl_ */
 /* Only single digits are currently supported */
 static void fix_name(const char *name, char *fixed_name)
@@ -1998,6 +1985,7 @@ char *nvram_default_get(const char *name)
 		}
 	}
 
+#ifdef TCONFIG_BCMARM
 #ifndef TCONFIG_BCM7
 #ifdef __CONFIG_HSPOT__
 	if (strcmp(fixed_name, "wl_bss_hs2_enabled") == 0) {
@@ -2007,6 +1995,7 @@ char *nvram_default_get(const char *name)
 	}
 #endif /* __CONFIG_HSPOT__ */
 #endif /* !TCONFIG_BCM7 */
+#endif /* TCONFIG_BCMARM */
 
 	for (idx = 0; router_defaults[idx].name != NULL; idx++) {
 		if (strcmp(router_defaults[idx].name, fixed_name) == 0) {
@@ -2048,142 +2037,3 @@ void nvram_restore_var(char *prefix, char *name)
 		}
 	}
 }
-
-#else /* TCONFIG_BCMARM */
-/* MIPS */
-const defaults_t if_generic[] = {
-	{ "lan_ifname",			"br0"				},
-	{ "lan_ifnames",		"eth0 eth2 eth3 eth4"		},
-	{ "wan_ifname",			"eth1"				},
-	{ "wan_ifnames",		"eth1"				},
-
-	{ NULL, NULL }
-};
-
-#define BRIDGE_BLOCK_IF_VLAN(i) \
-	{ "lan" #i "_ifname",		""				}, \
-	{ "lan" #i "_ifnames",		""				},
-
-const defaults_t if_vlan[] = {
-	{ "wan_ifname",			"vlan1"				},
-	{ "wan_ifnames",		"vlan1"				},
-	{ "lan_ifname",			"br0"				},
-	{ "lan_ifnames",		"vlan0 eth1 eth2 eth3"		},
-#if BRIDGE_COUNT >= 2
- BRIDGE_BLOCK_IF_VLAN(1)
-#endif
-#if BRIDGE_COUNT >= 3
- BRIDGE_BLOCK_IF_VLAN(2)
-#endif
-#if BRIDGE_COUNT >= 4
- BRIDGE_BLOCK_IF_VLAN(3)
-#endif
-#if BRIDGE_COUNT >= 5
- BRIDGE_BLOCK_IF_VLAN(4)
-#endif
-#if BRIDGE_COUNT >= 6
- BRIDGE_BLOCK_IF_VLAN(5)
-#endif
-#if BRIDGE_COUNT >= 7
- BRIDGE_BLOCK_IF_VLAN(6)
-#endif
-#if BRIDGE_COUNT >= 8
- BRIDGE_BLOCK_IF_VLAN(7)
-#endif
-#if BRIDGE_COUNT >= 9
- BRIDGE_BLOCK_IF_VLAN(8)
-#endif
-#if BRIDGE_COUNT >= 10
- BRIDGE_BLOCK_IF_VLAN(9)
-#endif
-#if BRIDGE_COUNT >= 11
- BRIDGE_BLOCK_IF_VLAN(10)
-#endif
-#if BRIDGE_COUNT >= 12
- BRIDGE_BLOCK_IF_VLAN(11)
-#endif
-#if BRIDGE_COUNT >= 13
- BRIDGE_BLOCK_IF_VLAN(12)
-#endif
-#if BRIDGE_COUNT >= 14
- BRIDGE_BLOCK_IF_VLAN(13)
-#endif
-#if BRIDGE_COUNT >= 15
- BRIDGE_BLOCK_IF_VLAN(14)
-#endif
-#if BRIDGE_COUNT >= 16
- BRIDGE_BLOCK_IF_VLAN(15)
-#endif
-	{ NULL, NULL }
-};
-#endif /* TCONFIG_BCMARM */
-
-#else /* TCONFIG_BCMARM || NVRAM_DEFAULTS_FULL */
-
-#include <string.h>
-#include <ctype.h>
-#include <bcmnvram.h>
-
-/*
- * Keep the historical MIPS router_defaults[] stub used by wlconf and
- * other Broadcom consumers.  The nvram utility builds the full tables
- * above by compiling this file with NVRAM_DEFAULTS_FULL.
- */
-struct nvram_tuple router_defaults[] = {
-	{ NULL, NULL, 0 }
-};
-
-#ifdef CONFIG_BCMWL6
-/* Translates from, for example, wl0_ (or wl0.1_) to wl_. */
-/* Only single digits are currently supported */
-static void fix_name(const char *name, char *fixed_name)
-{
-	char *pSuffix = NULL;
-
-	/* Translate prefix wlx_ and wlx.y_ to wl_ */
-	/* Expected inputs are: wld_root, wld.d_root, wld.dd_root
-	 * We accept: wld + '_' anywhere
-	 */
-	pSuffix = strchr(name, '_');
-
-	if ((strncmp(name, "wl", 2) == 0) && isdigit(name[2]) && (pSuffix != NULL)) {
-		strcpy(fixed_name, "wl");
-		strcpy(&fixed_name[2], pSuffix);
-		return;
-	}
-
-	/* No match with above rules: default to input name */
-	strcpy(fixed_name, name);
-}
-
-/*
- * Find nvram param name; return pointer which should be treated as const
- * return NULL if not found.
- *
- * NOTE: This routine special-cases the variable wl_bss_enabled. It will
- * return the normal default value if asked for wl_ or wl0_. But it will
- * return 0 if asked for a virtual BSS reference like wl0.1_.
- */
-char *nvram_default_get(const char *name)
-{
-	int idx;
-	char fixed_name[NVRAM_MAX_VALUE_LEN];
-
-	fix_name(name, fixed_name);
-	if (strcmp(fixed_name, "wl_bss_enabled") == 0) {
-		if (name[3] == '.' || name[4] == '.') { /* Virtual interface */
-			return "0";
-		}
-	}
-
-	for (idx = 0; router_defaults[idx].name != NULL; idx++) {
-		if (strcmp(router_defaults[idx].name, fixed_name) == 0) {
-			return router_defaults[idx].value;
-		}
-	}
-
-	return NULL;
-}
-#endif /* CONFIG_BCMWL6 */
-
-#endif /* TCONFIG_BCMARM || NVRAM_DEFAULTS_FULL */
