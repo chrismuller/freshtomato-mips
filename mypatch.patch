@@ -1,0 +1,181 @@
+diff --git a/release/src/router/httpd/tomato.c b/release/src/router/httpd/tomato.c
+index 6d4d5403cf..f643eb2de8 100644
+--- a/release/src/router/httpd/tomato.c
++++ b/release/src/router/httpd/tomato.c
+@@ -827,6 +827,8 @@ static const nvset_t nvset_list[] = {
+ 	{ "dhcpc_121",			V_01				},	/* DHCP Classless Static Route (option 121) */
+ 	{ "force_igmpv2",		V_01				},
+ 	{ "lan_stp",			V_RANGE(0, 1)			},
++	{ "wk_mode",			V_LENGTH(1, 32)			},	// gateway, router
++	{ "wk_mode_x",			V_LENGTH(1, 1)			},
+ #ifdef TCONFIG_ZEBRA
+ 	{ "dr_setting",			V_RANGE(0, 3)			},
+ 	{ "dr_lan_tx",			V_LENGTH(0, 32)			},
+diff --git a/release/src/router/rc/firewall.c b/release/src/router/rc/firewall.c
+index eae0d7f4df..1f70a92779 100644
+--- a/release/src/router/rc/firewall.c
++++ b/release/src/router/rc/firewall.c
+@@ -55,6 +55,7 @@ static int debug_only = 0;
+ #endif
+ 
+ int ipv6_enabled;
++static int gateway_mode;
+ static int remotemanage;
+ 
+ static int wanup;
+@@ -768,6 +769,7 @@ static void mangle_table(void)
+ #endif /* TCONFIG_BCMARM */
+ 
+ #ifdef TCONFIG_BCMARM
++	if (gateway_mode) {
+ 	for (i = 0; i < wanfaces.count; ++i) {
+ 		if ((*(wanfaces.iface[i].name)) && (wanup)) {
+ 			/* Drop incoming packets which destination IP address is to our LAN side directly */
+@@ -808,6 +810,7 @@ static void mangle_table(void)
+ 		}
+ 	}
+ #endif
++	}
+ #endif /* TCONFIG_BCMARM */
+ 
+ 	ipt_routerpolicy();
+@@ -836,6 +839,7 @@ static void nat_table(void)
+ 	/* 2 for nat */
+ 	ipt_bwlimit(2);
+ 
++	if (gateway_mode) {
+ 	for (i = 0; i < wanfaces.count; ++i) {
+ 		if (*(wanfaces.iface[i].name)) {
+ 			/* chain_wan_prerouting */
+@@ -1111,6 +1115,48 @@ static void nat_table(void)
+ 			}
+ 		break;
+ 	}
++	} else if ((!gateway_mode) && (nvram_match("wk_mode_x", "1"))) {
++			
++	for (i = 0; i < wanfaces.count; ++i) {
++		if (*(wanfaces.iface[i].name)) {
++			/* chain_wan_prerouting */
++			if (wanup)
++				ipt_write("-A PREROUTING -d %s -j %s\n", wanfaces.iface[i].ip, chain_wan_prerouting);
++		}
++	}
++	for (i = 0; i < wan2faces.count; ++i) {
++		if (*(wan2faces.iface[i].name)) {
++			/* chain_wan_prerouting */
++			if (wan2up)
++				ipt_write("-A PREROUTING -d %s -j %s\n", wan2faces.iface[i].ip, chain_wan_prerouting);
++		}
++	}
++#ifdef TCONFIG_MULTIWAN
++	for (i = 0; i < wan3faces.count; ++i) {
++		if (*(wan3faces.iface[i].name)) {
++			/* chain_wan_prerouting */
++			if (wan3up)
++				ipt_write("-A PREROUTING -d %s -j %s\n", wan3faces.iface[i].ip, chain_wan_prerouting);
++		}
++	}
++	for (i = 0; i < wan4faces.count; ++i) {
++		if (*(wan4faces.iface[i].name)) {
++			/* chain_wan_prerouting */
++			if (wan4up)
++				ipt_write("-A PREROUTING -d %s -j %s\n", wan4faces.iface[i].ip, chain_wan_prerouting);
++		}
++	}
++#endif /* TCONFIG_MULTIWAN */
++		
++	if (wanup || wan2up
++#ifdef TCONFIG_MULTIWAN
++	    || wan3up || wan4up
++#endif
++	) {
++		ipt_forward(IPT_TABLE_NAT);
++		ipt_triggered(IPT_TABLE_NAT);
++	}
++	}
+ 
+ 	ipt_write("COMMIT\n");
+ }
+@@ -1798,8 +1844,13 @@ static void filter_table(void)
+ 	pptp_client_firewall("OUTPUT", "", ipt_write);
+ #endif
+ 
+-	ip46t_write(ipv6_enabled, ":FORWARD DROP [0:0]\n");
+-	filter_forward();
++	if ((gateway_mode) || (nvram_match("wk_mode_x", "1"))) {
++		ip46t_write(ipv6_enabled, ":FORWARD DROP [0:0]\n");
++		filter_forward();
++	}
++	else
++		ip46t_write(ipv6_enabled, ":FORWARD ACCEPT [0:0]\n");
++
+ 	ip46t_write(ipv6_enabled, "COMMIT\n");
+ }
+ 
+@@ -1942,6 +1993,8 @@ int start_firewall(void)
+ 	enable_blackhole_detection();
+ 
+ 	chains_log_detection();
++	
++	gateway_mode = !nvram_match("wk_mode", "router");
+ 
+ 	for (n = 0; n < BRIDGE_COUNT; n++) {
+ 		memset(buf1, 0, sizeof(buf1));
+diff --git a/release/src/router/www/about.asp b/release/src/router/www/about.asp
+index 4f3aa72d2f..b8647ea2cf 100644
+--- a/release/src/router/www/about.asp
++++ b/release/src/router/www/about.asp
+@@ -39,7 +39,7 @@ function init() {
+ <!-- / / / -->
+ 
+ <div class="about">
+-	<b>FreshTomato Firmware <% version(1); %></b><br>
++	<b>FreshTomato Custom Firmware <% version(1); %></b><br>
+ 	<br>
+ 	Linux kernel <% version(2); %> and Broadcom Wireless Driver <% version(3); %><br>
+ 	<br>
+@@ -47,7 +47,8 @@ function init() {
+ 	<br>
+ 	<b>FreshTomato project page: </b><a href="https://freshtomato.org" class="new_window"> https://freshtomato.org</a><br>
+ 	<b>Forums about Tomato</b> - EN: <a href="https://www.linksysinfo.org/index.php?forums/tomato-firmware.33/" class="new_window">https://linksysinfo.org</a> PL: <a href="https://openlinksys.info" class="new_window">https://openlinksys.info</a><br>
+-	<b>Source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br>
++	<b>Original source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br>
++	<b>Source code: </b><a href="https://bitbucket.org/CM92/freshtomato-mips2" class="new_window"> https://bitbucket.org</a><br>
+ 	<br>
+ 	<hr>
+ <!-- OPTSIZE-BEGIN -->
+@@ -242,10 +243,10 @@ function init() {
+ <!-- OPTSIZE-END -->
+ 	<br><b>FreshTomato-MIPS - is an alternative, customized version, forked off from Tomato by Shibby</b>
+ 	<br>
+-	Copyright (C) 2016-2024 by Pedro
++	Copyright (C) 2016-2024 by Pedro and friends
+ 	<br>
+ 	<br>
+-	Built on <% build_time(); %> by Pedro
++	Built on <% build_time(); %> by Chris Muller
+ 	<br>
+ 	<br>
+ 	<br>
+diff --git a/release/src/router/www/advanced-routing.asp b/release/src/router/www/advanced-routing.asp
+index 089805d509..e9d00767c7 100644
+--- a/release/src/router/www/advanced-routing.asp
++++ b/release/src/router/www/advanced-routing.asp
+@@ -18,7 +18,7 @@
+ 
+ <script>
+ 
+-//	<% nvram("routes_static,dhcpc_33,dhcpc_121,lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname,wan_ifname,wan_iface,wan2_ifname,wan2_iface,wan3_ifname,wan3_iface,wan4_ifname,wan4_iface,dr_lan_rx,dr_lan1_rx,dr_lan2_rx,dr_lan3_rx,dr_wan_rx,dr_wan2_rx,dr_wan3_rx,dr_wan4_rx,wan_proto,wan2_proto,wan3_proto,wan4_proto,mwan_num"); %>
++//	<% nvram("wk_mode,wk_mode_x,routes_static,dhcpc_33,dhcpc_121,lan_ifname,lan1_ifname,lan2_ifname,lan3_ifname,wan_ifname,wan_iface,wan2_ifname,wan2_iface,wan3_ifname,wan3_iface,wan4_ifname,wan4_iface,dr_lan_rx,dr_lan1_rx,dr_lan2_rx,dr_lan3_rx,dr_wan_rx,dr_wan2_rx,dr_wan3_rx,dr_wan4_rx,wan_proto,wan2_proto,wan3_proto,wan4_proto,mwan_num"); %>
+ 
+ //	<% activeroutes(); %>
+ 
+@@ -282,6 +282,8 @@ function init() {
+ <div class="section">
+ 	<script>
+ 		createFieldTable('', [
++			{ title: 'Mode', name: 'wk_mode', type: 'select', options: [['gateway','Gateway'],['router','Router']], value: nvram.wk_mode },
++			{ title: 'X-Mode', name: 'wk_mode_x', type: 'select', options: [['0','No Firewall'],['1','With Firewall']], value: nvram.wk_mode_x },
+ /* ZEBRA-BEGIN */
+ 			{ title: 'RIPv1 &amp; v2' },
+ 			{ title: 'LAN', indent: 2, name: 'f_dr_lan', type: 'checkbox', value: ((nvram.dr_lan_rx != '0') && (nvram.dr_lan_rx != '')) },

@@ -19,7 +19,7 @@
 
 <script>
 
-//	<% nvram("routes_static,dhcpc_33,dhcpc_121,lan_ifname,wan_ifname,wan_iface,dr_lan_rx,dr_wan_rx,wan_proto,mwan_num,t_model_name,os_version"); %>
+//	<% nvram("wk_mode,wk_mode_x,routes_static,dhcpc_33,dhcpc_121,lan_ifname,wan_ifname,wan_iface,dr_lan_rx,dr_wan_rx,wan_proto,mwan_num,t_model_name,os_version,t_model_name,os_version"); %>
 
 //	<% activeroutes(); %>
 
@@ -272,7 +272,11 @@ for (var uidx = 1; uidx <= MAXWAN_NUM; ++uidx) {
 <div class="section">
 	<script>
 		var routing_fields = [];
-/* ZEBRA-BEGIN */
+		routing_fields.push(
+			{ title: 'Mode', name: 'wk_mode', type: 'select', options: [['gateway','Gateway'],['router','Router']], value: nvram.wk_mode },
+			{ title: 'X-Mode', name: 'wk_mode_x', type: 'select', options: [['0','No Firewall'],['1','With Firewall']], value: nvram.wk_mode_x }
+		);
+			/* ZEBRA-BEGIN */
 		routing_fields.push({ title: 'RIPv1 &amp; v2' });
 
 		for (var i = 0; i <= MAX_BRIDGE_ID; ++i) {

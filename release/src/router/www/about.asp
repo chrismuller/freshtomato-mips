@@ -30,7 +30,7 @@ function init() {
 <!-- / / / -->
 
 <div class="about">
-	FreshTomato Firmware <% version(1); %><br>
+	FreshTomato Custom Firmware <% version(1); %><br>
 	Linux kernel <% version(2); %> and Broadcom Wireless Driver <% version(3); %><br><br>
 	Built on <% build_time(); %> (git: #@GIT_HASH@) &nbsp;&nbsp;<b>|</b>&nbsp;&nbsp; Copyright &copy; 2016-2026 by Pedro<br><br><hr>
 
@@ -49,7 +49,10 @@ function init() {
 	   Thank you - this helps keep the forum clean and saves everyone time! 🍅</b><br><br>
 	<b>FreshTomato project page: </b><a href="https://freshtomato.org" class="new_window"> https://freshtomato.org</a><br>
 	<b>Forums about Tomato</b> - EN: <a href="https://www.linksysinfo.org/index.php?forums/tomato-firmware.33/" class="new_window">https://linksysinfo.org</a> PL: <a href="https://openlinksys.info" class="new_window">https://openlinksys.info</a><br>
-	<b>Source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br><br><hr><br>
+	<b>Original source code: </b><a href="https://github.com/FreshTomato-Project" class="new_window"> https://github.com</a><br>
+	<b>Source code: </b><a href="https://github.com/chrismuller/freshtomato-mips" class="new_window"> https://github.com</a><br>
+	<br>
+	<hr>
 <!-- OPTSIZE-BEGIN -->
 
 <!-- / / / -->
@@ -236,7 +239,17 @@ function init() {
 	<br>
 <!-- OPTSIZE-END -->
 
-	<b>A special thank you to everyone whose name isn't listed here — for your patches, new device support, bug reports, fixes, testing, and all the contributions that keep FreshTomato alive and improving. Your help means a lot! 🍅</b>
+<b>"Chris Muller" feature:</b><br>
+	- Re-adding switch allowing to choose between router and gateway mode<br>
+	<br>
+<br><b>FreshTomato-MIPS - is an alternative, customized version, forked off from Tomato by Shibby</b>
+	<br>
+	Copyright (C) 2016-2025 by Pedro and friends
+	<br>
+	<br>
+	Built on <% build_time(); %> by Chris Muller
+	<br>
+	<hr>
 </div>
 
 <!-- / / / -->
