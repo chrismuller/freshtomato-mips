@@ -74,6 +74,8 @@ ifneq ($(TCONFIG_BCMARM),y)
 	sed -i $(INSTALLDIR)/www/qos-classify.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
 	sed -i $(INSTALLDIR)/www/qos-graphs.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
 	sed -i $(INSTALLDIR)/www/qos-settings.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
+	sed -i $(INSTALLDIR)/www/qos-detailed.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
+	sed -i $(INSTALLDIR)/www/qos-ctrate.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
 	sed -i $(INSTALLDIR)/www/nas-usb.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
 	sed -i $(INSTALLDIR)/www/nas-samba.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
 	sed -i $(INSTALLDIR)/www/advanced-wireless.asp -e "/BCMARM-BEGIN/,/BCMARM-END/d"
@@ -110,6 +112,7 @@ ifneq ($(TCONFIG_L7),y)
 	sed -i $(INSTALLDIR)/www/qos-classify.asp -e "/L7-BEGIN/,/L7-END/d"
 	sed -i $(INSTALLDIR)/www/restrict-edit.asp -e "/L7-BEGIN/,/L7-END/d"
 else
+	sed -i $(INSTALLDIR)/www/advanced-ctnf.asp -e "/L7-NO-BEGIN/,/L7-NO-END/d"
 	sed -i $(INSTALLDIR)/www/qos-classify.asp -e "/L7-NO-BEGIN/,/L7-NO-END/d"
 	sed -i $(INSTALLDIR)/www/restrict-edit.asp -e "/L7-NO-BEGIN/,/L7-NO-END/d"
 endif

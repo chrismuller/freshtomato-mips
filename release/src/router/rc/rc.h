@@ -287,8 +287,10 @@ extern void stop_cron(void);
 extern void start_phy_tempsense(void);
 extern void stop_phy_tempsense(void);
 #endif
+#ifdef TCONFIG_ADBLOCK
 extern void start_adblock(int update);
 extern void stop_adblock(void);
+#endif
 #ifdef TCONFIG_ZEBRA
 extern void start_zebra(void);
 extern void stop_zebra(void);
@@ -592,6 +594,9 @@ extern void stop_snmp(void);
 
 /* tor.c */
 #ifdef TCONFIG_TOR
+extern int tor_runtime_enabled(void);
+extern void tor_runtime_set(int enabled);
+extern int tor_newnym(void);
 extern void start_tor(int force);
 extern void stop_tor(void);
 #endif
