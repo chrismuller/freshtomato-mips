@@ -1199,15 +1199,58 @@ static int wg_set_peer_keepalive(char *iface, char *pubkey, char *keepalive)
 	return 0;
 }
 
+/*
+ * Internal peers normally omit the port and inherit the local interface
+ * port. Preserve an explicitly configured port and format bare IPv6
+ * addresses using WireGuard's [address]:port syntax.
+ */
+static int wg_format_peer_endpoint(const char *endpoint, const char *port, char *buffer, const size_t size)
+{
+	const char *first_colon, *last_colon, *close_bracket;
+	int n;
+
+	if (endpoint[0] == '[') {
+		close_bracket = strrchr(endpoint, ']');
+		if (close_bracket && close_bracket[1] == ':')
+			n = snprintf(buffer, size, "%s", endpoint);
+		else if (close_bracket && close_bracket[1] == '\0')
+			n = snprintf(buffer, size, "%s:%s", endpoint, port);
+		else
+			n = snprintf(buffer, size, "%s", endpoint);
+	}
+	else {
+		first_colon = strchr(endpoint, ':');
+		last_colon = strrchr(endpoint, ':');
+
+		if (first_colon && first_colon == last_colon)
+			n = snprintf(buffer, size, "%s", endpoint); /* IPv4/FQDN with explicit port */
+		else if (first_colon)
+			n = snprintf(buffer, size, "[%s]:%s", endpoint, port); /* bare IPv6 */
+		else
+			n = snprintf(buffer, size, "%s:%s", endpoint, port);
+	}
+
+	if (n < 0 || (size_t)n >= size) {
+		logmsg(LOG_WARNING, "wireguard peer endpoint is too long: %s", endpoint);
+		return -1;
+	}
+
+	return 0;
+}
+
 static int wg_set_peer_endpoint(const int unit, char *iface, char *pubkey, const char *endpoint)
 {
 	wg_script_ctx_t *ctx = &wg_script_ctx[unit];
-	char buffer[BUF_SIZE_64];
+	char buffer[BUF_SIZE_128];
 
-	if (atoi(getNVRAMVar("wg%d_com", unit)) == 3) /* 'External - VPN Provider' */
-		snprintf(buffer, BUF_SIZE_64, "%s", endpoint);
-	else
-		snprintf(buffer, BUF_SIZE_64, "%s:%s", endpoint, ctx->port);
+	if (atoi(getNVRAMVar("wg%d_com", unit)) == 3) { /* 'External - VPN Provider' */
+		if (strlcpy(buffer, endpoint, sizeof(buffer)) >= sizeof(buffer)) {
+			logmsg(LOG_WARNING, "wireguard peer endpoint is too long: %s", endpoint);
+			return -1;
+		}
+	}
+	else if (wg_format_peer_endpoint(endpoint, ctx->port, buffer, sizeof(buffer)))
+		return -1;
 
 	if (eval("wg", "set", iface, "peer", pubkey, "endpoint", buffer)) {
 		logmsg(LOG_WARNING, "command failed: wg set %s peer %s endpoint %s", iface, pubkey, buffer);
@@ -1834,6 +1877,49 @@ void stop_wg_all(void)
 	modprobe_r("wireguard");
 }
 
+static int wg_unit_is_external_all(const int unit)
+{
+	return (atoi(getNVRAMVar("wg%d_com", unit)) == 3 && atoi(getNVRAMVar("wg%d_rgwr", unit)) == VPN_RGW_ALL);
+}
+
+static int wg_unit_is_active_or_starting(const int unit)
+{
+	char iface[IF_SIZE];
+	char buffer[BUF_SIZE_32];
+	char child_pid[BUF_SIZE_32];
+	int pid;
+
+	snprintf(iface, IF_SIZE, "wg%d", unit);
+	if (wg_if_exist(iface))
+		return 1;
+
+	snprintf(child_pid, BUF_SIZE_32, pid_path, unit);
+	memset(buffer, 0, sizeof(buffer));
+	if (f_read_string(child_pid, buffer, sizeof(buffer)) <= 0)
+		return 0;
+
+	pid = atoi(buffer);
+	return (pid > 0 && ppid(pid) > 0);
+}
+
+static void wg_stop_other_external_all(const int unit)
+{
+	int i;
+
+	if (!wg_unit_is_external_all(unit))
+		return;
+
+	for (i = 0; i < WG_INTERFACE_MAX; i++) {
+		if (i == unit)
+			continue;
+
+		if (wg_unit_is_external_all(i) && wg_unit_is_active_or_starting(i)) {
+			logmsg(LOG_INFO, "wg%d: switching 'External - VPN Provider' with 'Redirect Internet traffic' set to 'All' from wg%d", unit, i);
+			stop_wireguard(i);
+		}
+	}
+}
+
 void start_wireguard(const int unit)
 {
 	char *nv, *nvp, *rka, *b;
@@ -1855,6 +1941,9 @@ void start_wireguard(const int unit)
 		logmsg(LOG_WARNING, "%s: another process (PID: %s) still up, aborting ...", __FUNCTION__, buffer);
 		return;
 	}
+
+	/* enforce a single active External VPN Provider using the default route */
+	wg_stop_other_external_all(unit);
 
 	/* determine interface */
 	snprintf(iface, IF_SIZE, "wg%d", unit);
@@ -2070,7 +2159,7 @@ void stop_wireguard(const int unit)
 
 	/* wait for child of start_wireguard to finish (if any) */
 	memset(buffer, 0, BUF_SIZE);
-	if (f_read_string(wg_child_pid, buffer, BUF_SIZE) > 0 && atoi(buffer) > 0 && ppid(atoi(buffer)) > 0 && (m-- > 0)) {
+	while (f_read_string(wg_child_pid, buffer, BUF_SIZE) > 0 && atoi(buffer) > 0 && ppid(atoi(buffer)) > 0 && (m-- > 0)) {
 		logmsg(LOG_DEBUG, "*** %s: waiting for child process of start_wireguard to end, %d secs left ...", __FUNCTION__, m);
 		sleep(1);
 	}

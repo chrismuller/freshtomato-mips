@@ -943,13 +943,13 @@ static void nat_table(void)
 	}
 
 #ifdef TCONFIG_TOR
-		/* TOR */
-		if (nvram_match("tor_enable", "1") && nvram_match("tor_solve_only", "0")) {
-			char *torports;
-			char *toriface = nvram_safe_get("tor_iface");
-			char *tortrans = nvram_safe_get("tor_transport");
-			char buf[8];
-			int done = 0;
+	/* TOR */
+	if (tor_runtime_enabled() && !nvram_get_int("tor_solve_only")) {
+		char *torports;
+		char *toriface = nvram_safe_get("tor_iface");
+		char *tortrans = nvram_safe_get("tor_transport");
+		char buf[8];
+		int done = 0;
 
 			if (nvram_match("tor_ports", "custom"))
 				torports = nvram_safe_get("tor_ports_custom");
