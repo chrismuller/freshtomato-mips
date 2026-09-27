@@ -1,0 +1,68 @@
+diff --git a/release/src/router/mdu/mdu.c b/release/src/router/mdu/mdu.c
+index 2c545d3438..46a83b711f 100644
+--- a/release/src/router/mdu/mdu.c
++++ b/release/src/router/mdu/mdu.c
+@@ -249,29 +249,46 @@ static void route_adddel(const char *ip, unsigned int add)
+ 
+ 	strlcpy(cmd, "ip route show default", sizeof(cmd));
+ 	memset(buf, 0, sizeof(buf)); /* reset */
+-	if ((mdu_eval(cmd, MDU_ROUTE_FN) == 0) && (f_read_string(MDU_ROUTE_FN, buf, sizeof(buf)) > 2)) { /* default_route_fragment */
+-		if ((p = strpbrk(buf, "\r\n")) != NULL)
+-			*p = '\0';
+ 
+-		if (strncmp(buf, "default ", 8) == 0)
+-			memmove(buf, buf + 8, strlen(buf + 8) + 1);
++	if (mdu_eval(cmd, MDU_ROUTE_FN) == 0) {
++		FILE *fp;
++		char line[256];
+ 
+-		if ((size_t)snprintf(cmd, sizeof(cmd), "ip route %s %s %s", (add ? "add" : "del"), ip, buf) >= sizeof(cmd)) {
+-			logmsg(LOG_ERR, "%s: route cmd truncated", __FUNCTION__);
+-			return;
++		fp = fopen(MDU_ROUTE_FN, "r");
++		if (fp != NULL) {
++			while (fgets(line, sizeof(line), fp) != NULL) {
++
++				/* strip newline */
++				if ((p = strpbrk(line, "\r\n")) != NULL)
++					*p = '\0';
++
++				/* look for the real default route */
++				if (strncmp(line, "default ", 8) == 0) {
++					/* remove leading "default " */
++					memmove(line, line + 8, strlen(line + 8) + 1);
++
++					/* copy cleaned default route fragment */
++					strlcpy(buf, line, sizeof(buf));
++					break;
++				}
++			}
++			fclose(fp);
+ 		}
+ 
+-		logmsg(LOG_DEBUG, "*** %s: cmd=%s", __FUNCTION__, cmd);
+-		mdu_eval(cmd, NULL);
+-	}
++		/* only build route if we actually found a default route */
++		if (buf[0] != '\0') {
++			if ((size_t)snprintf(cmd, sizeof(cmd),
++				"ip route %s %s %s",
++				(add ? "add" : "del"), ip, buf) >= sizeof(cmd)) {
+ 
+-	if ((size_t)snprintf(cmd, sizeof(cmd), "ip route %s %s dev %s %s metric 50000", (add ? "add" : "del"), ip, ifname, buf2) >= sizeof(cmd)) {
+-		logmsg(LOG_ERR, "%s: route cmd truncated", __FUNCTION__);
+-		return;
+-	}
++				logmsg(LOG_ERR, "%s: route cmd truncated", __FUNCTION__);
++				return;
++			}
+ 
+-	logmsg(LOG_DEBUG, "*** %s: cmd=%s", __FUNCTION__, cmd);
+-	mdu_eval(cmd, NULL);
++			logmsg(LOG_DEBUG, "*** %s: cmd=%s", __FUNCTION__, cmd);
++			mdu_eval(cmd, NULL);
++		}
++	}
+ }
+ 
+ static int check_stop(void)
